@@ -1,0 +1,92 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv  # uv 默认虚拟环境目录（但通常应该提交 .venv，因为 uv 支持可提交的虚拟环境）
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Data files
+*.db
+*.sqlite
+*.sqlite3
+data/raw/
+data/processed/
+*.pkl
+*.pickle
+
+# Logs
+logs/
+*.log
+
+# Model files
+models/*.bin
+models/*.pt
+models/*.pth
+models/*.ckpt
+
+# Vector DB
+chroma_db/
+milvus_data/
+
+# Cache
+.cache/
+__pycache__/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.next/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid

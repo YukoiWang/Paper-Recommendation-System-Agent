@@ -1,0 +1,130 @@
+[project]
+name = "intellischolar"
+version = "1.0.0"
+description = "IntelliScholar - 多智能体论文推荐系统"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "IntelliScholar Team"}
+]
+keywords = ["recommendation", "llm", "multi-agent", "academic", "papers"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    # Web Framework
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    
+    # LangGraph & LangChain
+    "langgraph>=0.0.20",
+    "langchain>=0.1.0",
+    "langchain-openai>=0.0.2",
+    "langchain-community>=0.0.10",
+    
+    # Database
+    "sqlalchemy>=2.0.23",
+    "psycopg2-binary>=2.9.9",
+    "alembic>=1.12.1",
+    
+    # Vector Database
+    "chromadb>=0.4.18",
+    "pymilvus>=2.3.4",
+    
+    # Redis & Cache
+    "redis>=5.0.1",
+    "celery>=5.3.4",
+    
+    # ML & Embedding
+    "torch>=2.1.0",
+    "transformers>=4.35.2",
+    "sentence-transformers>=2.2.2",
+    "lightgbm>=4.1.0",
+    "numpy>=1.24.3",
+    "scikit-learn>=1.3.2",
+    
+    # HTTP & API
+    "httpx>=0.25.2",
+    "aiohttp>=3.9.1",
+    "requests>=2.31.0",
+    
+    # Data Processing
+    "pandas>=2.1.3",
+    "python-dateutil>=2.8.2",
+    
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "loguru>=0.7.2",
+    "tqdm>=4.66.1",
+    
+    # Frontend (Streamlit)
+    "streamlit>=1.28.1",
+    "plotly>=5.18.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+intellischolar = "backend.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"

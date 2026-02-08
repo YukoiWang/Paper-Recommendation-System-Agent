@@ -1,0 +1,8 @@
+# uv 配置文件
+# 此文件用于配置 uv 的行为
+
+# 虚拟环境目录（默认：.venv）
+# UV_PROJECT_ENVIRONMENT = ".venv"
+
+# Python 版本（可选）
+# UV_PYTHON = "3.10"
