@@ -14,6 +14,7 @@ from agent.rerank_prompt import build_rerank_messages, parse_rerank_response
 
 logger = logging.getLogger(__name__)
 DEFAULT_BGE_RERANKER_PATH = "./output/bge-finetuned"
+FALLBACK_BGE_RERANKER = "BAAI/bge-reranker-base"
 RankMode = Literal["llm", "bge_reranker"]
 
 
@@ -47,6 +48,23 @@ class _OpenAIWrapper:
         return (r.choices[0].message.content or "").strip()
 
 
+def _resolve_model_path(model_path: str) -> str:
+    """
+    If model_path is a local directory that exists, use it (finetuned).
+    Otherwise fall back to the base HuggingFace model (auto-downloaded).
+    """
+    import os
+    if os.path.isdir(model_path):
+        config_file = os.path.join(model_path, "config.json")
+        if os.path.isfile(config_file):
+            logger.info("Using finetuned reranker: %s", model_path)
+            return model_path
+        logger.warning("Directory %s exists but has no config.json; falling back to %s", model_path, FALLBACK_BGE_RERANKER)
+    else:
+        logger.info("Finetuned model not found at %s; falling back to %s", model_path, FALLBACK_BGE_RERANKER)
+    return FALLBACK_BGE_RERANKER
+
+
 def _score_with_bge_reranker(model_path: str, query: str, doc_texts: List[str], batch_size: int = 32) -> Optional[List[float]]:
     try:
         import torch
@@ -54,10 +72,13 @@ def _score_with_bge_reranker(model_path: str, query: str, doc_texts: List[str], 
     except ImportError as e:
         logger.warning("transformers/torch not installed; BGE reranker unavailable: %s", e)
         return None
+
+    resolved_path = _resolve_model_path(model_path)
     try:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
-        model = AutoModelForSequenceClassification.from_pretrained(model_path).to(device)
+        logger.info("Loading BGE reranker from %s on %s", resolved_path, device)
+        tokenizer = AutoTokenizer.from_pretrained(resolved_path)
+        model = AutoModelForSequenceClassification.from_pretrained(resolved_path).to(device)
         model.eval()
         pairs = [[query, d] for d in doc_texts]
         all_scores = []
@@ -70,7 +91,7 @@ def _score_with_bge_reranker(model_path: str, query: str, doc_texts: List[str], 
             all_scores.extend([float(s) for s in scores])
         return all_scores
     except Exception as e:
-        logger.warning("BGE reranker load/predict failed: %s", e)
+        logger.warning("BGE reranker load/predict failed (%s): %s", resolved_path, e)
         return None
 
 
