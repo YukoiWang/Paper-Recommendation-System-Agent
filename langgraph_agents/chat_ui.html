@@ -204,13 +204,7 @@ function addMessage(role, content, meta) {
     el.textContent = content;
   } else {
     let html = renderMarkdown(content);
-    if (meta && meta.papers && meta.papers.length > 0) {
-      html += '<ol class="papers-list">';
-      meta.papers.forEach(p => {
-        html += `<li><strong>[${esc(p.index)}]</strong> ${esc(p.title)} <span style="color:var(--text-dim)">${esc(p.published)}</span></li>`;
-      });
-      html += '</ol>';
-    }
+    /* Papers reference list is now included in response text by backend */
     if (meta) {
       html += '<div class="planner-badge">';
       html += `<span class="badge badge-route">${esc(meta.planner_route)}</span>`;

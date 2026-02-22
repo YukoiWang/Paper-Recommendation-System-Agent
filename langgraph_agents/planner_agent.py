@@ -89,6 +89,17 @@ or any topic that needs paper evidence → RETRIEVE_LOCAL
 → NEED_CLARIFY
 4. When in doubt, prefer RETRIEVE_LOCAL over NO_RETRIEVAL.
 
+## Response Style
+In addition to routing, decide HOW the response should be structured:
+- "recommend": The user explicitly wants paper recommendations or a list of papers \
+(e.g. "推荐几篇RAG论文", "find me papers on attention", "有什么好的NLP论文"). \
+Papers are the main output, listed one by one.
+- "narrative": The user wants knowledge, explanation, analysis, comparison, or \
+historical overview of a topic, with papers serving as supporting evidence \
+(e.g. "讲讲VLM的发展", "compare ViT and CNN", "总结attention机制的演进", \
+"what are the key challenges in RLHF"). Content is the main output, papers are \
+cited inline as [N].
+
 ## Input
 User query: {user_query}
 Optimized query: {optimized_query}
@@ -99,6 +110,7 @@ Papers already in context: {has_paper_context}
 Return valid JSON only — no markdown fences, no extra text:
 {{
   "route": "NO_RETRIEVAL | RETRIEVE_LOCAL | NEED_CLARIFY",
+  "response_style": "recommend | narrative",
   "reasoning": "brief explanation of your decision (1-2 sentences)"
 }}"""
 
@@ -397,8 +409,12 @@ class PlannerAgent:
             if route not in ALL_ROUTES:
                 logger.warning("LLM returned invalid route '%s', defaulting to RETRIEVE_LOCAL", route)
                 route = ROUTE_RETRIEVE_LOCAL
+            style = decision.get("response_style", "recommend").lower().strip()
+            if style not in ("recommend", "narrative"):
+                style = "recommend"
             return {
                 "route": route,
+                "response_style": style,
                 "reasoning": decision.get("reasoning", ""),
             }
         except Exception as e:
@@ -892,6 +908,7 @@ class PlannerAgent:
         do_online = wants_latest or state.get("is_daily_rec", False)
         decision = {
             "route": route,
+            "response_style": route_result.get("response_style", "recommend"),
             "optimized_query": optimized_query,
             "reasoning": route_result.get("reasoning", ""),
             "retrieval_evaluation": retrieval_eval,
@@ -1024,7 +1041,8 @@ class PlannerAgent:
         greetings = {"hi", "hello", "hey", "thanks", "thank you", "bye", "ok", "okay",
                      "你好", "谢谢", "好的", "嗯", "再见"}
         if q in greetings or len(q) < 3:
-            return {"route": ROUTE_NO_RETRIEVAL, "reasoning": "Greeting or trivial input."}
+            return {"route": ROUTE_NO_RETRIEVAL, "response_style": "recommend",
+                    "reasoning": "Greeting or trivial input."}
 
         import re
         vague_patterns = [
@@ -1034,7 +1052,8 @@ class PlannerAgent:
             r"^(有什么|有没有)(论文|文章)?[吗呢]?$",
         ]
         if any(re.match(pat, q) for pat in vague_patterns):
-            return {"route": ROUTE_NEED_CLARIFY, "reasoning": "Vague request with no topic."}
+            return {"route": ROUTE_NEED_CLARIFY, "response_style": "recommend",
+                    "reasoning": "Vague request with no topic."}
 
         clarify_signals = [
             q == "recommend",
@@ -1042,7 +1061,15 @@ class PlannerAgent:
             len(q.split()) < 2 and "?" not in q,
         ]
         if any(clarify_signals):
-            return {"route": ROUTE_NEED_CLARIFY, "reasoning": "Query too vague for retrieval."}
+            return {"route": ROUTE_NEED_CLARIFY, "response_style": "recommend",
+                    "reasoning": "Query too vague for retrieval."}
+
+        narrative_kw = [
+            "compare", "summarize", "explain", "what is", "how does", "difference",
+            "history", "evolution", "overview", "development",
+            "对比", "总结", "讲讲", "介绍", "发展", "演进", "综述", "概述", "区别",
+        ]
+        style = "narrative" if any(kw in q for kw in narrative_kw) else "recommend"
 
         retrieval_kw = [
             "paper", "method", "approach", "model", "technique", "compare",
@@ -1050,12 +1077,15 @@ class PlannerAgent:
             "summarize", "explain", "what is", "how does", "difference",
         ]
         if any(kw in q for kw in retrieval_kw) or "?" in q:
-            return {"route": ROUTE_RETRIEVE_LOCAL, "reasoning": "Query likely needs paper evidence."}
+            return {"route": ROUTE_RETRIEVE_LOCAL, "response_style": style,
+                    "reasoning": "Query likely needs paper evidence."}
 
         if has_paper_context:
-            return {"route": ROUTE_NO_RETRIEVAL, "reasoning": "General query with existing context."}
+            return {"route": ROUTE_NO_RETRIEVAL, "response_style": style,
+                    "reasoning": "General query with existing context."}
 
-        return {"route": ROUTE_RETRIEVE_LOCAL, "reasoning": "Default: attempt retrieval."}
+        return {"route": ROUTE_RETRIEVE_LOCAL, "response_style": style,
+                "reasoning": "Default: attempt retrieval."}
 
     # -----------------------------------------------------------------
     # Profile extraction

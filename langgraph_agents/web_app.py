@@ -13,6 +13,7 @@ import logging
 import os
 import sys
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -32,7 +33,7 @@ except ImportError:
 from dotenv import load_dotenv
 load_dotenv(os.path.join(_root, ".env"))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response, Cookie
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -49,17 +50,52 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Paper QA System")
 workflow_app = None
 retrieval_agent = None
-profile = UserProfile(user_id="web_user", interest_text="machine learning")
 
 LOG_DIR = Path(_root) / "logs"
 STATE_LOG = LOG_DIR / "state_log.jsonl"
 PLANNER_LOG = LOG_DIR / "planner_log.jsonl"
 
-session_history: List[Dict[str, Any]] = []
-session_cited_papers: Dict[str, Any] = {}
-session_conversation_state: Optional[Dict[str, Any]] = None
-session_profile_asked: bool = False
-session_profile_completed: bool = False
+SESSION_TTL = 3600 * 6  # auto-expire sessions after 6 hours
+
+
+class SessionData:
+    __slots__ = (
+        "profile", "history", "cited_papers", "conversation_state",
+        "profile_asked", "profile_completed", "turn_counter", "last_active",
+    )
+
+    def __init__(self, sid: str):
+        self.profile = UserProfile(user_id=sid, interest_text="machine learning")
+        self.history: List[Dict[str, Any]] = []
+        self.cited_papers: Dict[str, Any] = {}
+        self.conversation_state: Optional[Dict[str, Any]] = None
+        self.profile_asked: bool = False
+        self.profile_completed: bool = False
+        self.turn_counter: int = 0
+        self.last_active: float = time.time()
+
+
+sessions: Dict[str, SessionData] = {}
+
+
+def _get_or_create_session(sid: str | None) -> tuple[str, SessionData]:
+    """Return (session_id, session_data), creating a new session if needed."""
+    now = time.time()
+    # Evict expired sessions periodically
+    if len(sessions) > 200:
+        expired = [k for k, v in sessions.items() if now - v.last_active > SESSION_TTL]
+        for k in expired:
+            del sessions[k]
+
+    if sid and sid in sessions:
+        s = sessions[sid]
+        s.last_active = now
+        return sid, s
+
+    new_sid = uuid.uuid4().hex[:12]
+    s = SessionData(new_sid)
+    sessions[new_sid] = s
+    return new_sid, s
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +165,7 @@ def log_planner(turn: int, user_query: str, result: dict, elapsed: float):
         "user_query": user_query,
         "optimized_query": decision.get("optimized_query", ""),
         "route": decision.get("route", "?"),
+        "response_style": decision.get("response_style", "recommend"),
         "do_online_search": decision.get("do_online_search", False),
         "reasoning": decision.get("reasoning", ""),
         "retrieval_quality": ev.get("quality", "") if ev else None,
@@ -140,8 +177,6 @@ def log_planner(turn: int, user_query: str, result: dict, elapsed: float):
     with open(PLANNER_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
 
-
-turn_counter = 0
 
 # ---------------------------------------------------------------------------
 # API models
@@ -169,23 +204,24 @@ class ChatResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    global session_history, session_cited_papers, session_conversation_state
-    global turn_counter, session_profile_asked, session_profile_completed, profile
+async def chat(req: ChatRequest, request: Request, response: Response):
+    sid = request.cookies.get("sid")
+    sid, sess = _get_or_create_session(sid)
+    response.set_cookie("sid", sid, max_age=SESSION_TTL, httponly=True, samesite="lax")
 
     state = {
-        "user_id": profile.user_id,
-        "user_profile": profile,
+        "user_id": sess.profile.user_id,
+        "user_profile": sess.profile,
         "user_query": req.message,
         "user_feedback": "",
         "is_daily_rec": False,
         "top_k": req.top_k,
         "online_offline_fusion_ratio": 0.5,
-        "history": session_history,
-        "cited_papers": session_cited_papers,
-        "conversation_state": session_conversation_state,
-        "profile_asked": session_profile_asked,
-        "profile_completed": session_profile_completed,
+        "history": sess.history,
+        "cited_papers": sess.cited_papers,
+        "conversation_state": sess.conversation_state,
+        "profile_asked": sess.profile_asked,
+        "profile_completed": sess.profile_completed,
     }
 
     t0 = time.time()
@@ -196,22 +232,36 @@ async def chat(req: ChatRequest):
             response="Sorry, the request timed out (90s). Please try again.",
             papers=[], planner_route="TIMEOUT", planner_optimized_query="",
             planner_reasoning="Timeout", do_online_search=False,
-            retrieval_quality=None, elapsed=90.0, turn=turn_counter,
+            retrieval_quality=None, elapsed=90.0, turn=sess.turn_counter,
+        )
+    except Exception as exc:
+        import traceback
+        tb = traceback.format_exc()
+        logger.error("Workflow error for query %r:\n%s", req.message, tb)
+        elapsed = time.time() - t0
+        return ChatResponse(
+            response=f"Sorry, an internal error occurred: {type(exc).__name__}: {exc}",
+            papers=[], planner_route="ERROR", planner_optimized_query="",
+            planner_reasoning=str(exc)[:300], do_online_search=False,
+            retrieval_quality=None, elapsed=round(elapsed, 2), turn=sess.turn_counter,
         )
     elapsed = time.time() - t0
-    turn_counter += 1
+    sess.turn_counter += 1
 
-    session_history = result.get("history", session_history)
-    session_cited_papers = result.get("cited_papers", session_cited_papers)
-    session_conversation_state = result.get("conversation_state", session_conversation_state)
-    session_profile_asked = result.get("profile_asked", session_profile_asked)
-    session_profile_completed = result.get("profile_completed", session_profile_completed)
+    sess.history = result.get("history", sess.history)
+    sess.cited_papers = result.get("cited_papers", sess.cited_papers)
+    sess.conversation_state = result.get("conversation_state", sess.conversation_state)
+    sess.profile_asked = result.get("profile_asked", sess.profile_asked)
+    sess.profile_completed = result.get("profile_completed", sess.profile_completed)
     updated_profile = result.get("user_profile")
     if updated_profile is not None:
-        profile = updated_profile
+        sess.profile = updated_profile
 
-    log_state(turn_counter, req.message, result, elapsed)
-    log_planner(turn_counter, req.message, result, elapsed)
+    try:
+        log_state(sess.turn_counter, req.message, result, elapsed)
+        log_planner(sess.turn_counter, req.message, result, elapsed)
+    except Exception:
+        logger.exception("Failed to write logs")
 
     decision = result.get("planner_decision") or {}
     ev = decision.get("retrieval_evaluation")
@@ -234,21 +284,18 @@ async def chat(req: ChatRequest):
         do_online_search=decision.get("do_online_search", False),
         retrieval_quality=ev.get("quality") if ev else None,
         elapsed=round(elapsed, 2),
-        turn=turn_counter,
+        turn=sess.turn_counter,
     )
 
 
 @app.post("/api/new")
-async def new_session():
-    global session_history, session_cited_papers, session_conversation_state
-    global turn_counter, session_profile_asked, session_profile_completed, profile
-    session_history = []
-    session_cited_papers = {}
-    session_conversation_state = None
-    turn_counter = 0
-    session_profile_asked = False
-    session_profile_completed = False
-    profile = UserProfile(user_id="web_user", interest_text="machine learning")
+async def new_session(request: Request, response: Response):
+    sid = request.cookies.get("sid")
+    if sid and sid in sessions:
+        del sessions[sid]
+    new_sid = uuid.uuid4().hex[:12]
+    sessions[new_sid] = SessionData(new_sid)
+    response.set_cookie("sid", new_sid, max_age=SESSION_TTL, httponly=True, samesite="lax")
     return {"status": "ok"}
 
 

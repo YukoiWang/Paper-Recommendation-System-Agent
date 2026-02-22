@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -100,6 +101,8 @@ rephrase or give me more details?"
 - If the conversation history lacks relevant context, admit it rather \
 than guessing.
 - Cite papers as [1], [2], etc., matching the numbered list below.
+- Do NOT append a reference list or bibliography at the end of your response. \
+The system will automatically add one. Just use [N] inline citations.
 
 ## Response Guidelines
 - Recommendations: explain WHY each paper is relevant, highlight key \
@@ -182,6 +185,35 @@ do NOT write generic reasons like "this is a good paper".
 3. After listing all papers, provide a brief synthesis: common themes, \
 how the papers relate to each other, and a suggested next step.
 4. Respond in the same language as the user's query.
+
+User's query for reference: {user_query}"""
+
+
+NARRATIVE_INSTRUCTION = """\
+## Narrative Format (MUST follow when explaining, comparing, or summarizing topics)
+
+You are answering a knowledge question about an academic topic. \
+The user wants to UNDERSTAND something — not receive a paper list.
+
+### Structure your response around CONTENT, not papers:
+- Organize by logical structure: development stages, method categories, \
+comparison dimensions, key concepts, or chronological evolution.
+- Weave paper citations [N] naturally into the narrative as supporting evidence. \
+For example: "The introduction of the Transformer architecture [3] marked a \
+turning point, enabling models like BERT [5] to achieve..."
+- When mentioning a paper, briefly note its key contribution inline — \
+do NOT dedicate a separate section to each paper.
+
+### Rules:
+1. Do NOT use the per-paper recommendation format \
+(i.e. do NOT write "**[N] Paper Title**" followed by bullet points for each paper).
+2. The response should read like a knowledgeable explanation or essay, \
+with papers cited as evidence throughout.
+3. You may group papers when they share a common theme: \
+"Several works [2][4][6] have explored this direction..."
+4. End with a brief synthesis or forward-looking insight, and offer \
+to dive deeper into any aspect.
+5. Respond in the same language as the user's query.
 
 User's query for reference: {user_query}"""
 
@@ -279,6 +311,8 @@ class PaperQAAgent:
             )
             messages.append({"role": "system", "content": online_note})
 
+        response_style = decision.get("response_style", "recommend")
+
         if papers:
             context = self._build_paper_context(papers)
             for i, p in enumerate(papers):
@@ -287,10 +321,16 @@ class PaperQAAgent:
                 "role": "system",
                 "content": PAPER_CONTEXT_BLOCK.format(context=context),
             })
-            messages.append({
-                "role": "system",
-                "content": RECOMMENDATION_INSTRUCTION.format(user_query=query),
-            })
+            if response_style == "narrative":
+                messages.append({
+                    "role": "system",
+                    "content": NARRATIVE_INSTRUCTION.format(user_query=query),
+                })
+            else:
+                messages.append({
+                    "role": "system",
+                    "content": RECOMMENDATION_INSTRUCTION.format(user_query=query),
+                })
 
         for m in history:
             messages.append({"role": m.get("role", "user"),
@@ -299,6 +339,9 @@ class PaperQAAgent:
             messages.append({"role": "user", "content": query})
 
         response_text = self.llm.chat(messages)
+
+        if papers:
+            response_text = self._append_reference_list(response_text, cited)
 
         new_history = self._append_and_trim(
             history, query, response_text, {"num_papers": len(papers)},
@@ -510,6 +553,51 @@ class PaperQAAgent:
     # ---------------------------------------------------------------
     # Internal helpers
     # ---------------------------------------------------------------
+
+    @staticmethod
+    def _strip_llm_reference_section(response: str) -> str:
+        """Remove any reference/bibliography section the LLM may have generated,
+        since we will append a programmatic one with accurate metadata."""
+        patterns = [
+            r'\n---\s*\n\*{0,2}(?:References|参考文献|引用文献|参考论文|Bibliography)\*{0,2}\s*\n[\s\S]*$',
+            r'\n#{1,3}\s*(?:References|参考文献|引用文献|参考论文|Bibliography)\s*\n[\s\S]*$',
+            r'\n\*{2}(?:References|参考文献|引用文献|参考论文|Bibliography)\*{2}\s*\n[\s\S]*$',
+        ]
+        for pat in patterns:
+            response = re.sub(pat, '', response, flags=re.IGNORECASE)
+        return response.rstrip()
+
+    @staticmethod
+    def _append_reference_list(response: str, cited: Dict[str, "Paper"]) -> str:
+        """Strip any LLM-generated reference section, then append a
+        programmatic one with accurate paper metadata."""
+        refs_used = sorted(set(int(m) for m in re.findall(r"\[(\d+)\]", response)))
+        if not refs_used:
+            return response
+
+        response = PaperQAAgent._strip_llm_reference_section(response)
+
+        lines = ["\n\n---\n**References**"]
+        for n in refs_used:
+            key = f"[{n}]"
+            p = cited.get(key)
+            if p is None:
+                continue
+            parts = [f"[{n}] {p.title}"]
+            authors = ", ".join(p.authors[:4]) if p.authors else ""
+            if len(p.authors) > 4:
+                authors += " et al."
+            if authors:
+                parts.append(authors)
+            if p.published:
+                parts.append(f"({p.published})")
+            cats = " | ".join(p.categories) if p.categories else ""
+            if cats:
+                parts.append(cats)
+            lines.append("  " + ". ".join(parts))
+        if len(lines) == 1:
+            return response
+        return response + "\n".join(lines)
 
     def _build_paper_context(self, papers: List[Paper]) -> str:
         if not papers:
