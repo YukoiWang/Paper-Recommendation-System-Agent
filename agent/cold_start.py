@@ -4,7 +4,7 @@ import logging
 from typing import List, Tuple
 import numpy as np
 
-from models import Paper, UserProfile
+from agent.models import Paper, UserProfile
 
 logger = logging.getLogger(__name__)
 

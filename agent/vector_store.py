@@ -236,13 +236,121 @@ class LanceDBVectorStore:
         self._vec_cache.clear()
 
 
+class ChromaDBVectorStore:
+    """Read-only wrapper around an existing ChromaDB collection with 768-dim embeddings."""
+
+    def __init__(self, db_path: str = "/tmp/chroma_db", collection_name: str = "papers"):
+        try:
+            __import__("pysqlite3")
+            import sys as _sys
+            _sys.modules["sqlite3"] = _sys.modules.pop("pysqlite3")
+        except ImportError:
+            pass
+
+        import chromadb
+        self._client = chromadb.PersistentClient(path=db_path)
+        self._col = self._client.get_collection(collection_name)
+        self._count = self._col.count()
+        self.dim = 768
+        self._id_set: Set[str] = set()
+        logger.info("ChromaDBVectorStore: %s papers, path=%s, collection=%s",
+                     self._count, db_path, collection_name)
+
+    @property
+    def size(self) -> int:
+        return self._count
+
+    def search(self, query: np.ndarray, top_k: int = 10,
+               exclude_ids: Optional[Set[str]] = None) -> List[Tuple[str, float]]:
+        qvec = np.asarray(query, dtype=np.float32).ravel().tolist()
+        fetch_k = top_k + (len(exclude_ids) if exclude_ids else 0) + 10
+        results = self._col.query(
+            query_embeddings=[qvec], n_results=min(fetch_k, self._count),
+            include=["distances"],
+        )
+        out: List[Tuple[str, float]] = []
+        for pid, dist in zip(results["ids"][0], results["distances"][0]):
+            if exclude_ids and pid in exclude_ids:
+                continue
+            score = 1.0 / (1.0 + dist)
+            out.append((pid, score))
+            if len(out) >= top_k:
+                break
+        return out
+
+    def search_with_metadata(self, query: np.ndarray, top_k: int = 10,
+                             exclude_ids: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
+        """Search and return results with title, abstract, year, venue, score."""
+        qvec = np.asarray(query, dtype=np.float32).ravel().tolist()
+        fetch_k = top_k + (len(exclude_ids) if exclude_ids else 0) + 10
+        results = self._col.query(
+            query_embeddings=[qvec], n_results=min(fetch_k, self._count),
+            include=["metadatas", "documents", "distances"],
+        )
+        out: List[Dict[str, Any]] = []
+        ids = results["ids"][0]
+        metas = results["metadatas"][0]
+        docs = results["documents"][0]
+        dists = results["distances"][0]
+        for pid, meta, doc, dist in zip(ids, metas, docs, dists):
+            if exclude_ids and pid in exclude_ids:
+                continue
+            score = 1.0 / (1.0 + dist)
+            out.append({
+                "paper_id": pid,
+                "title": meta.get("title", ""),
+                "abstract": doc or "",
+                "year": meta.get("year"),
+                "venue": meta.get("venue", ""),
+                "score": score,
+            })
+            if len(out) >= top_k:
+                break
+        return out
+
+    def get_papers_by_ids(self, ids: List[str]) -> List[Dict[str, Any]]:
+        """Fetch papers by IDs from the collection."""
+        results = self._col.get(ids=ids, include=["metadatas", "documents"])
+        papers: List[Dict[str, Any]] = []
+        for pid, meta, doc in zip(results["ids"], results["metadatas"], results["documents"]):
+            papers.append({
+                "paper_id": pid,
+                "title": meta.get("title", ""),
+                "abstract": doc or "",
+                "year": meta.get("year"),
+                "venue": meta.get("venue", ""),
+            })
+        return papers
+
+    def add(self, ids: List[str], vectors: np.ndarray) -> int:
+        return 0
+
+    def get_vector(self, paper_id: str) -> Optional[np.ndarray]:
+        return None
+
+    def save(self, path: str | Path) -> None:
+        pass
+
+    def load(self, path: str | Path) -> None:
+        pass
+
+    def clear(self) -> None:
+        pass
+
+
 def create_vector_store(
     backend: str = "numpy",
     dim: int = 256,
     db_path: str = "./.lancedb_index",
+    **kwargs,
 ) -> Any:
     if backend == "numpy":
         return NumpyVectorStore(dim=dim)
     if backend == "lancedb":
         return LanceDBVectorStore(dim=dim, db_path=db_path)
-    raise ValueError(f"Unknown backend: {backend}. Use 'numpy' or 'lancedb'.")
+    if backend == "chromadb":
+        return ChromaDBVectorStore(
+            db_path=kwargs.get("chromadb_path", "/tmp/chroma_db"),
+            collection_name=kwargs.get("collection_name", "papers"),
+        )
+    raise ValueError(f"Unknown backend: {backend}. Use 'numpy', 'lancedb', or 'chromadb'.")

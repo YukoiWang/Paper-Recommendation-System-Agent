@@ -12,7 +12,7 @@ if str(_root) not in sys.path:
 
 from agent.models import Paper, UserProfile
 from agent.embedder import create_embedder
-from agent.vector_store import create_vector_store
+from agent.vector_store import create_vector_store, ChromaDBVectorStore
 from agent.recall_strategies import vector_recall
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class RetrievalAgent:
     """
     Thin retrieval: index papers, then retrieve by query using vector_recall only.
-    No rule-based or ItemCF; those are in RecallAgent.
+    Supports multiple backends: numpy, lancedb, or chromadb (read-only, 108万 papers).
     """
 
     def __init__(
@@ -32,24 +32,45 @@ class RetrievalAgent:
         vector_store_backend: str = "numpy",
         vector_store_path: str = "./.lancedb_index",
         top_k_vector: int = 50,
+        chromadb_path: str = "/tmp/chroma_db",
+        collection_name: str = "papers",
     ):
-        logger.info(
-            "RetrievalAgent: embedding=%s dim=%s store=%s",
-            embedding_backend, embedding_dim, vector_store_backend,
-        )
-        self.embedder = create_embedder(
-            backend=embedding_backend, dim=embedding_dim, model_name=model_name,
-        )
         self._vs_backend = vector_store_backend
         self._vs_path = vector_store_path
-        self.store = create_vector_store(
-            backend=vector_store_backend, dim=embedding_dim, db_path=vector_store_path,
-        )
+        self._use_chromadb = (vector_store_backend == "chromadb")
+
+        if self._use_chromadb:
+            logger.info("RetrievalAgent: using ChromaDB at %s", chromadb_path)
+            self.store = create_vector_store(
+                backend="chromadb",
+                chromadb_path=chromadb_path,
+                collection_name=collection_name,
+            )
+            self.embedder = create_embedder(
+                backend="sentence_transformer",
+                model_name=model_name,
+            )
+            self._is_fitted = True
+        else:
+            logger.info(
+                "RetrievalAgent: embedding=%s dim=%s store=%s",
+                embedding_backend, embedding_dim, vector_store_backend,
+            )
+            self.embedder = create_embedder(
+                backend=embedding_backend, dim=embedding_dim, model_name=model_name,
+            )
+            self.store = create_vector_store(
+                backend=vector_store_backend, dim=embedding_dim, db_path=vector_store_path,
+            )
+            self._is_fitted = False
+
         self._cache: Dict[str, Paper] = {}
-        self._is_fitted = False
         self.top_k_vector = top_k_vector
 
     def index_papers(self, papers: List[Paper]) -> int:
+        if self._use_chromadb:
+            logger.info("ChromaDB mode: skipping index_papers (data already loaded)")
+            return 0
         if not papers:
             return 0
         texts = [p.text_for_embedding() for p in papers]
@@ -70,7 +91,9 @@ class RetrievalAgent:
         return added
 
     def index_papers_precomputed(self, papers: List[Paper]) -> int:
-        """Use papers' existing embeddings."""
+        if self._use_chromadb:
+            logger.info("ChromaDB mode: skipping index_papers_precomputed")
+            return 0
         valid = [p for p in papers if p.embedding is not None]
         if not valid:
             logger.warning("No precomputed embeddings; falling back to index_papers.")
@@ -103,9 +126,6 @@ class RetrievalAgent:
         query: str,
         top_k: int = 10,
     ) -> List[Paper]:
-        """
-        Query -> vector retrieval only. No user profile blending.
-        """
         try:
             query_vec = self.embedder.encode(query)
         except Exception as e:
@@ -113,6 +133,23 @@ class RetrievalAgent:
             return []
         if self.store.size == 0:
             return []
+
+        if self._use_chromadb and isinstance(self.store, ChromaDBVectorStore):
+            hits = self.store.search_with_metadata(query_vec, top_k=top_k)
+            papers = []
+            for h in hits:
+                papers.append(Paper(
+                    paper_id=h["paper_id"],
+                    title=h.get("title", ""),
+                    abstract=h.get("abstract", ""),
+                    authors=[],
+                    categories=[],
+                    published=str(h.get("year", "")),
+                    score=h["score"],
+                ))
+            logger.info("retrieve_by_query (ChromaDB): %s papers (top_k=%s)", len(papers), top_k)
+            return papers
+
         results = vector_recall(query_vec, self.store, top_k=top_k * 3)
         papers = []
         for pid, score in results[:top_k]:

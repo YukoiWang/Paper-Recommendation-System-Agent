@@ -1,0 +1,26 @@
+# 用于 scripts/load_papers.py（json/lance）
+# 若需写入 metadata_db，需安装 PostgreSQL 相关依赖
+#
+# 若磁盘空间不足，先装 CPU 版 PyTorch 再装本文件（可省数 GB）:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r scripts/requirements_load_lance.txt
+#
+# 或先清缓存: pip cache purge
+#
+# pysqlite3-binary: ChromaDB 需要 sqlite3>=3.35.0，系统 sqlite 过旧时用此替代
+pysqlite3-binary>=0.5.0
+
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+lancedb>=0.6.0
+numpy>=1.24.0
+pandas>=2.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+loguru>=0.7.0
+python-dotenv>=1.0.0
+requests>=2.28.0
+
+# metadata_db（PostgreSQL）- 若需写入 meta_db 供 create_listwise 使用
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0

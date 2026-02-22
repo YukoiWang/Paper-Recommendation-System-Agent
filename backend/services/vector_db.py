@@ -15,6 +15,7 @@ class VectorDBService:
     def __init__(self):
         self.db_type = settings.VECTOR_DB_TYPE
         self.client = None
+        self.collection = None
         self._initialize()
     
     def _initialize(self):
@@ -35,6 +36,7 @@ class VectorDBService:
                 logger.info("ChromaDB initialized")
             except Exception as e:
                 logger.error(f"Failed to initialize ChromaDB: {e}")
+                self.collection = None
         elif self.db_type == "milvus":
             try:
                 from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType
@@ -66,6 +68,13 @@ class VectorDBService:
         """
         try:
             if self.db_type == "chroma":
+                if self.collection is None:
+                    err = RuntimeError(
+                        "ChromaDB 未初始化（可能因 sqlite3 版本过旧）。"
+                        "请安装: pip install pysqlite3-binary"
+                    )
+                    logger.error(str(err))
+                    raise err
                 ids = [p.get("paper_id") or str(i) for i, p in enumerate(papers)]
                 documents = [p.get("abstract", "") or p.get("title", "") for p in papers]
                 metadatas = [
@@ -167,8 +176,10 @@ class VectorDBService:
         try:
             if self.db_type == "chroma":
                 results = self.collection.get(ids=[paper_id], include=["embeddings"])
-                if results["embeddings"] and len(results["embeddings"]) > 0:
-                    return results["embeddings"][0]
+                embs = results.get("embeddings")
+                if embs is not None and len(embs) > 0:
+                    e = embs[0]
+                    return e.tolist() if hasattr(e, "tolist") else list(e)
             return None
         except Exception as e:
             logger.error(f"Failed to get embedding for {paper_id}: {e}")

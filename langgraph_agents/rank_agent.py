@@ -1,8 +1,9 @@
-"""Rank agent: LLM or BGE reranker. From agent/rank_agent."""
+"""Rank agent: LLM or BGE reranker (LoRA-finetuned). From agent/rank_agent."""
 from __future__ import annotations
 import logging
+import os
 import re
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional, Tuple
 
 import sys
 _root = str(__import__("pathlib").Path(__file__).resolve().parent.parent)
@@ -14,8 +15,10 @@ from agent.rerank_prompt import build_rerank_messages, parse_rerank_response
 
 logger = logging.getLogger(__name__)
 DEFAULT_BGE_RERANKER_PATH = "./output/bge-finetuned"
-FALLBACK_BGE_RERANKER = "BAAI/bge-reranker-base"
+FALLBACK_BGE_RERANKER = "BAAI/bge-reranker-v2-m3"
 RankMode = Literal["llm", "bge_reranker"]
+
+_bge_model_cache: Dict[str, Tuple] = {}
 
 
 def _default_llm_client(api_key: Optional[str] = None, base_url: str = "https://api.deepseek.com",
@@ -48,40 +51,56 @@ class _OpenAIWrapper:
         return (r.choices[0].message.content or "").strip()
 
 
-def _resolve_model_path(model_path: str) -> str:
-    """
-    If model_path is a local directory that exists, use it (finetuned).
-    Otherwise fall back to the base HuggingFace model (auto-downloaded).
-    """
-    import os
-    if os.path.isdir(model_path):
-        config_file = os.path.join(model_path, "config.json")
-        if os.path.isfile(config_file):
-            logger.info("Using finetuned reranker: %s", model_path)
-            return model_path
-        logger.warning("Directory %s exists but has no config.json; falling back to %s", model_path, FALLBACK_BGE_RERANKER)
+def _is_lora_adapter(path: str) -> bool:
+    return os.path.isfile(os.path.join(path, "adapter_config.json"))
+
+
+def _load_bge_model(model_path: str):
+    """Load BGE reranker, with LoRA adapter support and caching."""
+    import torch
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+    if model_path in _bge_model_cache:
+        logger.debug("Using cached BGE reranker: %s", model_path)
+        return _bge_model_cache[model_path]
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    if os.path.isdir(model_path) and _is_lora_adapter(model_path):
+        from peft import PeftModel, PeftConfig
+        adapter_cfg = PeftConfig.from_pretrained(model_path)
+        base_name = adapter_cfg.base_model_name_or_path
+        logger.info("Loading base model %s + LoRA adapter %s on %s", base_name, model_path, device)
+        base_model = AutoModelForSequenceClassification.from_pretrained(base_name)
+        model = PeftModel.from_pretrained(base_model, model_path)
+        model = model.merge_and_unload()
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+    elif os.path.isdir(model_path) and os.path.isfile(os.path.join(model_path, "config.json")):
+        logger.info("Loading full finetuned reranker: %s on %s", model_path, device)
+        model = AutoModelForSequenceClassification.from_pretrained(model_path)
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
     else:
-        logger.info("Finetuned model not found at %s; falling back to %s", model_path, FALLBACK_BGE_RERANKER)
-    return FALLBACK_BGE_RERANKER
+        fallback = FALLBACK_BGE_RERANKER
+        logger.info("Finetuned model not found at %s; using %s on %s", model_path, fallback, device)
+        model = AutoModelForSequenceClassification.from_pretrained(fallback)
+        tokenizer = AutoTokenizer.from_pretrained(fallback)
+
+    model.to(device).eval()
+    _bge_model_cache[model_path] = (model, tokenizer, device)
+    return model, tokenizer, device
 
 
 def _score_with_bge_reranker(model_path: str, query: str, doc_texts: List[str], batch_size: int = 32) -> Optional[List[float]]:
     try:
         import torch
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
     except ImportError as e:
-        logger.warning("transformers/torch not installed; BGE reranker unavailable: %s", e)
+        logger.warning("torch not installed; BGE reranker unavailable: %s", e)
         return None
 
-    resolved_path = _resolve_model_path(model_path)
     try:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info("Loading BGE reranker from %s on %s", resolved_path, device)
-        tokenizer = AutoTokenizer.from_pretrained(resolved_path)
-        model = AutoModelForSequenceClassification.from_pretrained(resolved_path).to(device)
-        model.eval()
+        model, tokenizer, device = _load_bge_model(model_path)
         pairs = [[query, d] for d in doc_texts]
-        all_scores = []
+        all_scores: List[float] = []
         for i in range(0, len(pairs), batch_size):
             batch = pairs[i : i + batch_size]
             with torch.no_grad():
@@ -91,7 +110,7 @@ def _score_with_bge_reranker(model_path: str, query: str, doc_texts: List[str], 
             all_scores.extend([float(s) for s in scores])
         return all_scores
     except Exception as e:
-        logger.warning("BGE reranker load/predict failed (%s): %s", resolved_path, e)
+        logger.warning("BGE reranker load/predict failed (%s): %s", model_path, e)
         return None
 
 
@@ -100,7 +119,7 @@ class RankAgent:
 
     def __init__(
         self,
-        mode: RankMode = "llm",
+        mode: RankMode = "bge_reranker",
         api_key: Optional[str] = None,
         base_url: str = "https://api.deepseek.com",
         model: str = "deepseek-chat",

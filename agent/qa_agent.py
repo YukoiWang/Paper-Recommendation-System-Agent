@@ -1,4 +1,6 @@
-"""Paper QA agent: retrieval + LLM. Query-aware retrieval, intent routing, multi-turn, citations."""
+"""Paper QA agent: retrieval + LLM. Query-aware retrieval, intent routing, multi-turn, citations.
+Supports both standalone chat() and planner-driven process_turn(blackboard).
+"""
 from __future__ import annotations
 import logging
 import time
@@ -6,7 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from models import Paper, UserProfile
+from agent.models import Paper, UserProfile, is_profile_sufficient
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +179,20 @@ INTENT_PROMPTS = {
     Intent.EXPLAIN: EXPLAIN_PROMPT,
 }
 
+PROACTIVE_ASK_PROMPT = """The user has not provided enough interests for paper recommendation.
+Politely ask 1-2 specific questions to understand their research interests, e.g.:
+- Topics/areas (e.g. LLMs, vision, reinforcement learning)
+- Preferred categories (e.g. cs.LG, cs.CL)
+- Specific authors or recent papers they liked
+Keep it concise and friendly. Respond in English."""
+
+FEEDBACK_CLARIFY_PROMPT = """The user gave feedback on a recommendation, but it's vague or ambiguous.
+Ask them to clarify what they're looking for: more specific topics, different time range,
+or any other preferences. Be friendly and concise. Respond in English."""
+
+GENERAL_NO_PAPERS_PROMPT = """The user asked a general question but we don't have relevant paper context yet.
+Politely say you'll search for relevant papers and get back to them shortly. Respond in English."""
+
 
 class PaperQAAgent:
     def __init__(self, retrieval_agent, api_key: str, base_url: str = "https://api.deepseek.com",
@@ -215,6 +231,101 @@ class PaperQAAgent:
             "conversation_id": conv.conversation_id,
             "tokens_used": self.llm.total_tokens,
         }
+
+    def process_turn(self, blackboard) -> str:
+        """
+        Planner-driven flow: read blackboard, decide action, respond or request retrieval.
+        Returns: "responded" | "asked_clarification" | "need_retrieval" | "need_profile"
+        """
+        bb = blackboard
+        if not bb.user_query and not bb.user_feedback:
+            return "responded"
+        query = bb.user_query or bb.user_feedback
+        if not bb.history or bb.history[-1].role != "user" or bb.history[-1].content != query:
+            bb.add_user_message(query)
+        bb.trim_history()
+        profile = bb.user_profile or UserProfile(user_id=bb.user_id or "anonymous")
+
+        if bb.user_feedback:
+            return self._handle_feedback(bb, profile)
+
+        if bb.needs_profile_clarification or not is_profile_sufficient(profile):
+            return self._proactive_ask(bb, profile)
+
+        intent = classify_intent(query)
+        bb.qa_intent = intent
+
+        papers = list(bb.final_papers) if bb.final_papers else list(bb.ranked_papers)
+        if not papers and intent in (Intent.RECOMMEND, Intent.QA, Intent.COMPARE, Intent.SUMMARIZE, Intent.EXPLAIN):
+            return "need_retrieval"
+        if not papers and intent == Intent.GENERAL:
+            has_papers = self._check_history_contains_papers(bb)
+            bb.history_contains_papers = has_papers
+            if not has_papers:
+                return "need_retrieval"
+            papers = list(bb.cited_papers.values()) if bb.cited_papers else []
+            if not papers:
+                msg = self.llm.chat([
+                    {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + GENERAL_NO_PAPERS_PROMPT},
+                    *bb.get_history_for_llm(),
+                ])
+                bb.add_assistant_message(msg, metadata={"intent": intent})
+                return "responded"
+
+        context = self._build_paper_context(papers)
+        for i, p in enumerate(papers):
+            bb.cited_papers[f"[{i+1}]"] = p
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        prompt = INTENT_PROMPTS.get(intent, QA_PROMPT)
+        if prompt and context:
+            messages.append({"role": "system", "content": prompt.format(context=context)})
+        messages.extend(bb.get_history_for_llm()[:-1])
+        messages.append({"role": "user", "content": query})
+        response_text = self.llm.chat(messages)
+        bb.add_assistant_message(response_text, metadata={"intent": intent, "num_papers": len(papers)})
+        return "responded"
+
+    def _handle_feedback(self, bb, profile: UserProfile) -> str:
+        feedback = bb.user_feedback.strip().lower()
+        vague = len(feedback.split()) < 4 or feedback in ("no", "nope", "not really", "wrong", "bad", "不好")
+        if vague:
+            msg = self.llm.chat([
+                {"role": "system", "content": FEEDBACK_CLARIFY_PROMPT},
+                *bb.get_history_for_llm(),
+            ])
+            bb.add_assistant_message(msg)
+            bb.needs_profile_clarification = True
+            bb.user_feedback = ""
+            return "asked_clarification"
+        profile.special_requirements = profile.special_requirements or []
+        for w in feedback.split():
+            if len(w) > 2 and w not in profile.special_requirements:
+                profile.special_requirements.append(w)
+        if profile.interest_text and feedback not in profile.interest_text:
+            profile.interest_text = profile.interest_text + " " + feedback
+        elif not profile.interest_text:
+            profile.interest_text = feedback
+        bb.user_profile = profile
+        bb.profile_updated_from_feedback = True
+        bb.user_feedback = ""
+        msg = "I've updated your preferences. Would you like me to recommend papers again with these interests?"
+        bb.add_assistant_message(msg)
+        return "responded"
+
+    def _proactive_ask(self, bb, profile: UserProfile) -> str:
+        msg = self.llm.chat([
+            {"role": "system", "content": PROACTIVE_ASK_PROMPT},
+            *bb.get_history_for_llm(),
+        ])
+        bb.add_assistant_message(msg)
+        bb.needs_profile_clarification = True
+        return "need_profile"
+
+    def _check_history_contains_papers(self, bb) -> bool:
+        return len(bb.cited_papers) > 0 or any(
+            "[1]" in m.content or "paper" in m.content.lower()
+            for m in bb.history if m.role == "assistant"
+        )
 
     def get_session(self, conversation_id: str) -> Optional[Conversation]:
         return self._sessions.get(conversation_id)

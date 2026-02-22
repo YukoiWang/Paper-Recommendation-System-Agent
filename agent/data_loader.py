@@ -5,7 +5,7 @@ import os
 from typing import List, Optional
 import numpy as np
 
-from models import Paper
+from .models import Paper
 
 logger = logging.getLogger(__name__)
 
@@ -136,17 +136,36 @@ def load_from_lance_hf(
             fetch_n = min(fetch_n, total_rows)
             df = ds.head(fetch_n).to_pandas()
     else:
+        # HuggingFace: 优先用 datasets 流式加载（避免 pylance 读 lance 时的 panic）
+        import tempfile
+        _cache = os.path.join(tempfile.gettempdir(), "hf_datasets_cache")
+        os.environ.setdefault("HF_DATASETS_CACHE", _cache)
+        df = None
         try:
-            import lancedb
-        except ImportError as e:
-            raise ImportError("Lance from HF requires: pip install lancedb") from e
-        logger.info("Loading %s from HuggingFace", dataset_name)
-        db = lancedb.connect(f"hf://{dataset_name}")
-        names = db.table_names()
-        if not names:
-            raise RuntimeError(f"No tables in {dataset_name}")
-        table = db.open_table(names[0])
-        df = table.head(max_papers * 3).to_pandas() if (max_papers and max_papers > 0) else table.to_pandas()
+            from datasets import load_dataset
+            logger.info("Loading davanstrien/arxiv-example from HuggingFace (streaming)...")
+            stream = load_dataset(
+                "davanstrien/arxiv-example",
+                split="train",
+                streaming=True,
+                trust_remote_code=True,
+            )
+            need = (max_papers * 2) if (max_papers and max_papers > 0) else None  # None = no limit
+            rows = []
+            for i, row in enumerate(stream):
+                if need is not None and i >= need:
+                    break
+                rows.append(dict(row))
+            df = pd.DataFrame(rows)
+        except Exception as e:
+            logger.warning("datasets streaming failed: %s", e)
+            df = None
+        if df is None:
+            raise RuntimeError(
+                "Could not load arxiv papers. Try: pip install datasets, "
+                "set HF_DATASETS_CACHE=/tmp/hf_cache (for disk space), "
+                "or use lance_path= to a local lance directory."
+            )
 
     logger.info("Loaded %s rows", len(df))
 
@@ -167,7 +186,7 @@ def load_from_lance_hf(
             continue
         abstract = str(row.get("abstract", ""))
         paper_id = str(row.get("id", row.get("arxiv_id", "")))
-        cats_raw = row.get("categories", "")
+        cats_raw = row.get("categories", row.get("subjects", row.get("primary_subject", "")))
         if isinstance(cats_raw, str):
             categories = cats_raw.replace(",", " ").split()
         elif isinstance(cats_raw, list):
@@ -183,7 +202,10 @@ def load_from_lance_hf(
             authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
         else:
             authors = []
-        published = row.get("update_date", row.get("published", ""))
+        published = row.get(
+            "update_date",
+            row.get("published", row.get("submission_date", row.get("publication_date", ""))),
+        )
         if hasattr(published, "strftime"):
             published = published.strftime("%Y-%m-%d")
         else:

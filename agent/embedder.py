@@ -37,7 +37,7 @@ class TfidfEmbedder:
         self._norm.fit(svd_matrix)
         self._fitted = True
         explained = self._svd.explained_variance_ratio_.sum()
-        logger.info("Fit complete. Explained variance: %.2%%, dim=%s", explained, self.dim)
+        logger.info("Fit complete. Explained variance: %.2f%%, dim=%s", explained * 100, self.dim)
         return self
 
     def encode(self, text: str) -> np.ndarray:

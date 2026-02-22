@@ -1,13 +1,20 @@
 """
 Configuration management using Pydantic Settings
 """
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
 
 class Settings(BaseSettings):
     """Application settings"""
-    
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
     # App
     APP_NAME: str = "IntelliScholar"
     DEBUG: bool = False
@@ -16,8 +23,8 @@ class Settings(BaseSettings):
     # Database
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
-    POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_USER: str = "yukiwang"
+    POSTGRES_PASSWORD: str = "yukiwang"
     POSTGRES_DB: str = "intellischolar"
     DATABASE_URL: str = ""
     
@@ -28,7 +35,7 @@ class Settings(BaseSettings):
     
     # Vector Database
     VECTOR_DB_TYPE: str = "chroma"  # chroma or milvus
-    CHROMA_PERSIST_DIR: str = "./chroma_db"
+    CHROMA_PERSIST_DIR: str = "/tmp/chroma_db"
     MILVUS_HOST: str = "localhost"
     MILVUS_PORT: int = 19530
     
@@ -38,8 +45,8 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_MODEL: str = "gpt-4-turbo-preview"
     
-    # Embedding
-    EMBEDDING_MODEL: str = "bge-large-zh-v1.5"
+    # Embedding (BGE English for English papers; override via .env)
+    EMBEDDING_MODEL: str = "BAAI/bge-base-en-v1.5"
     EMBEDDING_DEVICE: str = "cuda"  # cuda or cpu
     
     # Ranking Model
@@ -55,11 +62,6 @@ class Settings(BaseSettings):
     
     # Cache
     CACHE_TTL: int = 3600  # seconds
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
 
 
 settings = Settings()

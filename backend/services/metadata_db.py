@@ -38,7 +38,13 @@ class MetadataDBService:
     """Metadata Database Service"""
     
     def __init__(self):
-        self.engine = create_engine(settings.DATABASE_URL, echo=False)
+        self.engine = create_engine(
+            settings.DATABASE_URL,
+            echo=False,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,
+        )
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self._create_tables()
     

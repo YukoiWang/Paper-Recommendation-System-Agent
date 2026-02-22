@@ -5,7 +5,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from models import UserProfile
+from agent.models import UserProfile
 from agent import RetrievalAgent
 from data_loader import load_builtin_corpus
 

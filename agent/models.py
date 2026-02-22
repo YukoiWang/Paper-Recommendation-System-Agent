@@ -33,6 +33,16 @@ class UserProfile:
     liked_items: List[str] = field(default_factory=list)
     followed_authors: List[str] = field(default_factory=list)
     preferred_categories: List[str] = field(default_factory=list)
+    special_requirements: List[str] = field(default_factory=list)  # from user feedback
+
+
+def is_profile_sufficient(profile: Optional[UserProfile]) -> bool:
+    """True if profile has enough info for retrieval (interests or preferences)."""
+    if profile is None:
+        return False
+    has_interests = bool(profile.interest_text or profile.interest_vector is not None)
+    has_prefs = bool(profile.followed_authors or profile.preferred_categories or profile.liked_items)
+    return has_interests or has_prefs
 
 
 @dataclass

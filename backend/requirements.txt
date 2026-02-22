@@ -4,18 +4,20 @@ uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 
-# LangGraph & LangChain
-langgraph==0.0.20
-langchain==0.1.0
-langchain-openai==0.0.2
-langchain-community==0.0.10
+# LangGraph & LangChain (需 Python 3.10+，仅全功能 API 需要；load_papers 不需要)
+# 若 Python 3.8/3.9 可先注释掉，或单独安装: pip install 'langgraph>=0.2' 'langchain>=0.1'
+# langgraph>=0.2.0
+# langchain>=0.1.0
+# langchain-openai>=0.0.2
+# langchain-community>=0.0.10
 
 # Database
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
 alembic==1.12.1
 
-# Vector Database
+# Vector Database (pysqlite3-binary: 系统 sqlite3 过旧时 ChromaDB 需要)
+pysqlite3-binary>=0.5.0
 chromadb==0.4.18
 pymilvus==2.3.4
 
@@ -24,12 +26,12 @@ redis==5.0.1
 celery==5.3.4
 
 # ML & Embedding
-torch==2.1.0
-transformers==4.35.2
-sentence-transformers==2.2.2
-lightgbm==4.1.0
-numpy==1.24.3
-scikit-learn==1.3.2
+torch>=2.0.0
+transformers>=4.35.0
+sentence-transformers>=2.2.0
+lightgbm>=4.0.0
+numpy>=1.24.0,<2.0
+scikit-learn>=1.3.0
 
 # HTTP & API
 httpx==0.25.2
@@ -37,8 +39,9 @@ aiohttp==3.9.1
 requests==2.31.0
 
 # Data Processing
-pandas==2.1.3
-python-dateutil==2.8.2
+pandas>=2.0.0
+lancedb>=0.6.0
+python-dateutil>=2.8.0
 
 # Utilities
 python-dotenv==1.0.0

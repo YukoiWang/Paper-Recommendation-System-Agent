@@ -30,6 +30,33 @@ def _profile_to_keywords(profile: Optional[UserProfile]) -> Tuple[List[str], Lis
     return keywords or ["machine learning"], categories
 
 
+def _extract_query_keywords(query: str) -> List[str]:
+    """Extract meaningful search keywords from a query string (supports English + Chinese)."""
+    import re
+    if not query or not query.strip():
+        return []
+    noise_words = {
+        "the", "a", "an", "of", "in", "on", "for", "and", "or", "with", "to",
+        "is", "are", "was", "were", "be", "been", "about", "from", "by", "that",
+        "this", "it", "as", "at", "how", "what", "which", "where", "when", "who",
+        "do", "does", "did", "can", "could", "will", "would", "should", "may",
+        "explain", "describe", "find", "search", "recommend", "suggest", "papers",
+        "latest", "recent", "new", "最新", "最近", "推荐", "找", "搜", "论文",
+        "介绍", "讲讲", "说说", "进展", "相关", "关于", "研究",
+    }
+    tokens = re.findall(r'[a-zA-Z][\w-]*|[\u4e00-\u9fff]+', query)
+    keywords = []
+    seen: set = set()
+    for t in tokens:
+        low = t.lower()
+        if low in noise_words or len(t) < 2:
+            continue
+        if low not in seen:
+            seen.add(low)
+            keywords.append(t)
+    return keywords[:8]
+
+
 def fetch_arxiv_papers(
     keywords: List[str],
     categories: List[str],
@@ -143,14 +170,21 @@ class OnlineSearchAgent:
         self.semantic_scholar_api_key = semantic_scholar_api_key or os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "")
 
     def run(self, state: dict) -> dict:
-        """Sync: read state, fetch papers, update state.online_search_result."""
+        """Sync: read state, fetch papers, update state.online_search_result.
+
+        Keyword priority: final_query / optimized_query > user_query > profile.
+        """
         profile = state.get("user_profile")
-        query = state.get("user_query", "")
-        keywords, categories = _profile_to_keywords(profile)
-        if query and not keywords:
-            keywords = [w for w in query.split() if len(w) > 2][:5] or ["machine learning"]
-        if not keywords:
-            keywords = ["machine learning"]
+        query = (
+            state.get("final_query")
+            or state.get("optimized_query")
+            or state.get("user_query", "")
+        )
+        profile_kw, categories = _profile_to_keywords(profile)
+
+        query_kw = _extract_query_keywords(query)
+        keywords = query_kw or profile_kw or ["machine learning"]
+
         all_papers = []
         if "arxiv" in self.sources:
             papers = fetch_arxiv_papers(
@@ -161,18 +195,20 @@ class OnlineSearchAgent:
             )
             all_papers.extend(papers)
         state["online_search_result"] = all_papers
-        logger.info("OnlineSearchAgent: wrote %s papers to state", len(all_papers))
+        logger.info("OnlineSearchAgent: wrote %s papers to state (keywords=%s)", len(all_papers), keywords[:5])
         return state
 
     async def run_async(self, state: dict) -> dict:
         """Async: same as run but can call Semantic Scholar."""
         profile = state.get("user_profile")
-        query = state.get("user_query", "")
-        keywords, categories = _profile_to_keywords(profile)
-        if query and not keywords:
-            keywords = [w for w in query.split() if len(w) > 2][:5] or ["machine learning"]
-        if not keywords:
-            keywords = ["machine learning"]
+        query = (
+            state.get("final_query")
+            or state.get("optimized_query")
+            or state.get("user_query", "")
+        )
+        profile_kw, categories = _profile_to_keywords(profile)
+        query_kw = _extract_query_keywords(query)
+        keywords = query_kw or profile_kw or ["machine learning"]
         query_str = " ".join(keywords)
         all_papers = []
         if "arxiv" in self.sources:

@@ -31,6 +31,8 @@ class WorkflowState(TypedDict, total=False):
 
     # --- Retrieval (query -> vector only) ---
     retrieval_result: List[Paper]
+    retrieval_retry_count: int
+    retrieval_insufficient: bool
 
     # --- Recall (multi-path merge) ---
     online_search_result: List[Paper]
@@ -46,6 +48,18 @@ class WorkflowState(TypedDict, total=False):
 
     # --- Plan (set by Planner) ---
     plan: Optional[Dict[str, Any]]
+    planner_decision: Optional[Dict[str, Any]]
+    optimized_query: str
+    final_query: str
+    parent_query: str
+    sub_queries: List[str]
+
+    # --- Profile gathering ---
+    profile_asked: bool
+    profile_completed: bool
+
+    # --- Conversation State Summary (written by QA agent each turn) ---
+    conversation_state: Optional[Dict[str, Any]]
 
     # --- Output ---
     response: str

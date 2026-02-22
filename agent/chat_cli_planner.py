@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Interactive CLI: load papers, index, chat with PaperQAAgent (DeepSeek API)."""
+"""Interactive CLI using Planner + Blackboard. Run from project root or agent/."""
 import os
 
 from dotenv import load_dotenv
-# 从项目根目录加载 .env（支持在 agent/ 或项目根目录运行）
 _env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
 load_dotenv(_env)
 
@@ -15,8 +14,12 @@ import logging
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from agent.models import UserProfile
-from agent import RetrievalAgent
+from blackboard import Blackboard
+from retrieval_agent import RetrievalAgent
 from qa_agent import PaperQAAgent
+from rank_agent import RankAgent
+from planner_agent import PlannerAgent
+from online_agent import OnlineSearchAgent
 
 
 def load_papers(args):
@@ -35,12 +38,12 @@ def load_papers(args):
 
 
 def main():
-    p = argparse.ArgumentParser(description="ML Paper QA Chat")
-    p.add_argument("--api-key", default=os.getenv("DEEPSEEK_API_KEY", ""), help="DeepSeek API key")
-    p.add_argument("--papers", default="builtin", choices=["builtin", "lance"], help="Paper source")
-    p.add_argument("--max-papers", type=int, default=5000, help="Max papers (lance)")
-    p.add_argument("--lance-path", default="", help="Local Lance dataset path")
-    p.add_argument("--no-prefer-recent", action="store_true", help="Lance: do not sort by date")
+    p = argparse.ArgumentParser(description="ML Paper Chat (Planner + Blackboard)")
+    p.add_argument("--api-key", default=os.getenv("DEEPSEEK_API_KEY", ""))
+    p.add_argument("--papers", default="builtin", choices=["builtin", "lance"])
+    p.add_argument("--max-papers", type=int, default=5000)
+    p.add_argument("--lance-path", default="")
+    p.add_argument("--no-prefer-recent", action="store_true")
     p.add_argument("--embedding", default="tfidf", choices=["tfidf", "sentence_transformer"])
     p.add_argument("--vector-store", default="numpy", choices=["numpy", "lancedb"])
     p.add_argument("--vector-store-path", default="./.lancedb_index")
@@ -81,11 +84,36 @@ def main():
         )
         retrieval.index_papers(papers)
 
-    print(f"Indexed {retrieval.index_size} papers. Starting chat (/quit to exit).\n")
+    print(f"Indexed {retrieval.index_size} papers.")
 
+    rank = RankAgent(mode="llm", api_key=args.api_key)
     qa = PaperQAAgent(retrieval_agent=retrieval, api_key=args.api_key, top_k_context=args.top_k)
-    user = UserProfile(user_id="user", interest_text="machine learning", preferred_categories=["cs.LG", "cs.AI"])
-    conv_id = None
+    try:
+        online = OnlineSearchAgent(time_window_days=30, max_results=15)
+    except Exception:
+        online = None
+
+    planner = PlannerAgent(
+        retrieval_agent=retrieval,
+        rank_agent=rank,
+        qa_agent=qa,
+        online_agent=online,
+        default_top_k=args.top_k,
+    )
+
+    user = UserProfile(
+        user_id="user",
+        interest_text="machine learning",
+        preferred_categories=["cs.LG", "cs.AI"],
+    )
+    bb = Blackboard(
+        user_id=user.user_id,
+        user_profile=user,
+        conversation_id="",
+        top_k=args.top_k,
+    )
+
+    print("\nPlanner+Blackboard Chat. /quit to exit, /new for new conv, /daily for daily rec.\n")
 
     while True:
         try:
@@ -97,15 +125,28 @@ def main():
         if line.lower() in ("/quit", "/q", "exit"):
             break
         if line.lower() == "/new":
-            conv_id = None
+            bb.clear_conversation()
+            bb.conversation_id = ""
             print("New conversation.")
             continue
-        try:
-            out = qa.chat(line, user=user, conversation_id=conv_id)
-            conv_id = out["conversation_id"]
-            print(out["response"])
-        except Exception as e:
-            print(f"Error: {e}")
+        if line.lower() == "/daily":
+            bb.user_query = ""
+            bb.is_daily_rec = True
+            planner.run(bb, is_daily=True)
+            if bb.history:
+                print(bb.history[-1].content)
+            else:
+                print("(No response)")
+            print()
+            continue
+
+        bb.user_query = line
+        bb.user_profile = user
+        planner.run(bb)
+        if bb.history:
+            print(bb.history[-1].content)
+        else:
+            print("(No response)")
         print()
 
 

@@ -45,8 +45,13 @@ ENV/
 *.sqlite3
 data/raw/
 data/processed/
+data/reranker/
 *.pkl
 *.pickle
+*.rar
+
+# Large output / trained models
+output/
 
 # Logs
 logs/

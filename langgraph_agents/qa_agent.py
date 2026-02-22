@@ -1,15 +1,21 @@
-"""Paper QA agent: pure LLM text generation. No routing, no intent classification.
+"""Paper QA agent — conversation, history, state summarization, response synthesis.
+
+Four responsibilities:
+  1. Chat naturally with user (proactive, anti-hallucination, forward-driving)
+  2. Manage conversation history (append every turn, auto-trim)
+  3. Summarize conversation state each turn → structured dict on shared state
+  4. Synthesize final answer from retrieved papers
 
 Three entry points called by workflow nodes:
-  - respond(state) -> generate answer based on papers + history
-  - ask_profile(state) -> ask user about research interests
-  - handle_feedback(state) -> process user feedback, update profile
+  - respond(state)         → generate answer based on papers + history
+  - ask_profile(state)     → proactively gather research interests
+  - handle_feedback(state) → process user feedback, update profile
 """
 from __future__ import annotations
+
+import json
 import logging
 import time
-import uuid
-from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import sys
@@ -24,68 +30,13 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Data classes for conversation management
-# ---------------------------------------------------------------------------
-
-@dataclass
-class Message:
-    role: str
-    content: str
-    timestamp: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-    def to_api_dict(self) -> Dict[str, str]:
-        return {"role": self.role, "content": self.content}
-
-
-@dataclass
-class Conversation:
-    conversation_id: str = ""
-    messages: List[Message] = field(default_factory=list)
-    cited_papers: Dict[str, Paper] = field(default_factory=dict)
-    max_history_turns: int = 20
-    max_context_chars: int = 60000
-
-    def __post_init__(self):
-        if not self.conversation_id:
-            self.conversation_id = str(uuid.uuid4())[:8]
-
-    def add_user_message(self, content: str) -> Message:
-        msg = Message(role="user", content=content, timestamp=time.time())
-        self.messages.append(msg)
-        self._trim()
-        return msg
-
-    def add_assistant_message(self, content: str, metadata: Dict = None) -> Message:
-        msg = Message(role="assistant", content=content, timestamp=time.time(), metadata=metadata or {})
-        self.messages.append(msg)
-        self._trim()
-        return msg
-
-    def get_history_for_api(self) -> List[Dict[str, str]]:
-        return [m.to_api_dict() for m in self.messages]
-
-    def _trim(self):
-        if len(self.messages) > self.max_history_turns * 2:
-            self.messages = self.messages[-(self.max_history_turns * 2):]
-        total = sum(len(m.content) for m in self.messages)
-        while total > self.max_context_chars and len(self.messages) > 2:
-            removed = self.messages.pop(0)
-            total -= len(removed.content)
-
-    def clear(self):
-        self.messages.clear()
-        self.cited_papers.clear()
-
-
-# ---------------------------------------------------------------------------
 # LLM client
 # ---------------------------------------------------------------------------
 
 class LLMClient:
     def __init__(self, api_key: str, base_url: str = "https://api.deepseek.com",
-                 model: str = "deepseek-chat", temperature: float = 0.7, max_tokens: int = 2048,
-                 timeout: float = 60.0):
+                 model: str = "deepseek-chat", temperature: float = 0.7,
+                 max_tokens: int = 2048, timeout: float = 60.0):
         try:
             from openai import OpenAI
         except ImportError as e:
@@ -118,66 +69,155 @@ class LLMClient:
 
 
 # ---------------------------------------------------------------------------
-# Prompt templates
+# Unified system prompt (replaces all intent-specific templates)
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are an expert ML research assistant. You help researchers discover, understand, and analyze machine learning papers from ArXiv.
-- Recommend papers, explain methods, compare approaches, summarize findings.
-- Cite papers as [1], [2] matching the provided list. Be precise and technical. Respond in English."""
+SYSTEM_PROMPT = """\
+You are an expert ML/AI research assistant helping researchers discover, \
+understand, and analyze machine learning papers.
 
-RECOMMEND_PROMPT = """Based on the user's interests and the retrieved papers below, give personalized recommendations. For each: why it's relevant, key contribution, connections to others.
+## Conversation Style
+- Be natural, warm, and conversational — like a knowledgeable colleague, \
+not a search engine.
+- Avoid robotic or formulaic responses. Vary your phrasing and structure.
+- Use a professional yet approachable tone.
 
-Retrieved papers:
-{context}"""
+## Proactiveness
+- If the user's request is vague or missing detail, proactively ask 1-2 \
+specific questions to clarify (e.g. research topics, preferred ArXiv \
+categories, time range, specific authors).
+- After answering, suggest a natural next step: "Want me to dive deeper \
+into any of these?" or "I can compare these methods if you'd like."
+- Drive the conversation forward — don't just answer, anticipate what the \
+user might need next.
 
-QA_PROMPT = """Answer using the retrieved papers. Cite as [1], [2].
+## Anti-Hallucination Rules (CRITICAL)
+- ONLY answer based on the retrieved papers provided in context. \
+Do NOT fabricate papers, authors, results, or citations.
+- If the retrieved papers are insufficient, say so honestly: \
+"Based on the papers I have, I can't fully answer this — could you \
+rephrase or give me more details?"
+- If the conversation history lacks relevant context, admit it rather \
+than guessing.
+- Cite papers as [1], [2], etc., matching the numbered list below.
 
-Retrieved papers:
-{context}"""
+## Response Guidelines
+- Recommendations: explain WHY each paper is relevant, highlight key \
+contributions, note connections between papers.
+- Questions: answer precisely with citations; distinguish paper claims \
+from your interpretation.
+- Comparisons: structure clearly — methodology, strengths, weaknesses, \
+applicable scenarios.
+- Summaries: group related work, highlight main findings and trends.
 
-COMPARE_PROMPT = """Compare and contrast the approaches in the retrieved papers. Methodology, strengths, weaknesses, scenarios.
+## System Capabilities
+- This system CAN search the internet for papers via ArXiv and Semantic Scholar.
+- If online search was performed for the current query, the results are included \
+in the retrieved papers below. Do NOT tell the user "I cannot access the internet" \
+— if papers were fetched online, mention that; if the online search returned no \
+results, say "I searched but found no relevant papers online" rather than \
+claiming you lack internet access.
 
-Retrieved papers:
-{context}"""
+## Language
+- Always respond in the same language as the user's query."""
 
-SUMMARIZE_PROMPT = """Concise summary of key findings and contributions from the retrieved papers. Group related work.
 
-Retrieved papers:
-{context}"""
+FIRST_TURN_PROFILE_PROMPT = """\
+[First-turn instruction] This is the very beginning of the conversation. \
+FIRST answer the user's question normally (or greet them warmly). \
+THEN, at the end, casually ask about their PURPOSE for looking up papers — \
+this helps you build a mental model of who they are without directly interrogating them.
 
-EXPLAIN_PROMPT = """Explain the concepts and methods in the retrieved papers. Use [1], [2] citations.
+The key insight: ask about their GOAL, not their identity. From their answer \
+you can infer their level, field, and needs.
 
-Retrieved papers:
-{context}"""
+Example good approaches (pick ONE that fits the conversation flow):
+- "对了，你找这些论文是为了写论文、做课程作业，还是工作项目需要？\
+告诉我的话我可以更有针对性地帮你。"
+- "By the way, are you looking into this for a research paper, a class project, \
+or a work project? Knowing your goal helps me give better suggestions."
+- "顺便问一下，你是在做哪个方向的研究？是刚入门想了解综述，\
+还是已经在做具体的课题了？"
+- "Just curious — is this for a literature review, exploring a new direction, \
+or building something specific? I can adjust my recommendations accordingly."
 
-INTENT_PROMPTS = {
-    "recommend": RECOMMEND_PROMPT,
-    "qa": QA_PROMPT,
-    "compare": COMPARE_PROMPT,
-    "summarize": SUMMARIZE_PROMPT,
-    "explain": EXPLAIN_PROMPT,
-}
+Rules:
+- ALWAYS answer/address the user's actual message first. The profile question \
+is a casual follow-up at the very end.
+- Keep the follow-up to 1-2 sentences. Make it sound like friendly small talk, \
+not a form to fill out.
+- If the user already mentioned their purpose or background, acknowledge it \
+naturally ("听起来你在做XX方面的研究") instead of re-asking.
+- Do NOT list multiple questions — pick the ONE most natural follow-up.
+- This is a ONE-TIME ask. If they ignore it later, never bring it up again."""
 
-PROACTIVE_ASK_PROMPT = """The user has not provided enough interests for paper recommendation.
-Politely ask 1-2 specific questions to understand their research interests, e.g.:
-- Topics/areas (e.g. LLMs, vision, reinforcement learning)
-- Preferred categories (e.g. cs.LG, cs.CL)
-- Specific authors or recent papers they liked
-Keep it concise and friendly. Respond in English."""
 
-FEEDBACK_CLARIFY_PROMPT = """The user gave feedback on a recommendation, but it's vague or ambiguous.
-Ask them to clarify what they're looking for: more specific topics, different time range,
-or any other preferences. Be friendly and concise. Respond in English."""
+PAPER_CONTEXT_BLOCK = """
+## Retrieved Papers
+{context}
+
+Use ONLY these papers to support your answer. Cite as [1], [2], etc."""
+
+
+RECOMMENDATION_INSTRUCTION = """\
+## Recommendation Format (MUST follow when recommending papers)
+
+You are recommending papers to the user. For EACH paper you mention, you MUST \
+provide a **recommendation reason** that explains why this specific paper is \
+relevant to the user's query.
+
+### Per-paper structure:
+**[N] Paper Title**
+- **Recommendation reason**: 1-2 sentences explaining WHY this paper is relevant \
+to the user's query — connect the paper's contribution to what the user is asking.
+- **Key contribution**: the main methodological or empirical insight.
+- **Relevance details**: specific aspects (method, dataset, task, findings) that \
+relate to the query.
+
+### Rules:
+1. The recommendation reason MUST reference the user's query or intent — \
+do NOT write generic reasons like "this is a good paper".
+2. If the paper has a relevance score, incorporate it naturally \
+(e.g. "highly relevant", "somewhat related") — do NOT show raw numbers.
+3. After listing all papers, provide a brief synthesis: common themes, \
+how the papers relate to each other, and a suggested next step.
+4. Respond in the same language as the user's query.
+
+User's query for reference: {user_query}"""
+
+
+# Prompt for the state-summarization LLM call (low temperature, concise)
+STATE_SUMMARY_PROMPT = """\
+Based on the conversation history below, extract a structured JSON summary. \
+Output valid JSON only — no markdown fences, no extra text.
+
+Conversation:
+{history_text}
+
+Return exactly this structure:
+{{
+  "user_intent": "recommend | qa | compare | summarize | feedback | general",
+  "research_topics": ["topic1", "topic2"],
+  "keywords": ["keyword1", "keyword2"],
+  "time_preference": "year or period, or null",
+  "venue_preference": ["venue1"],
+  "papers_discussed": ["title or short id of papers already discussed"],
+  "user_satisfaction": "satisfied | neutral | unsatisfied | unknown",
+  "open_questions": "what the user still wants to know (1 sentence or empty)",
+  "summary": "1-2 sentence summary of the conversation state"
+}}"""
 
 
 # ---------------------------------------------------------------------------
-# PaperQAAgent: pure text generation
+# PaperQAAgent
 # ---------------------------------------------------------------------------
 
 class PaperQAAgent:
-    """
-    Pure LLM text generation agent. No routing, no intent classification.
-    Called by workflow nodes with papers and context already prepared.
+    """Conversation agent with four responsibilities:
+    1. Natural, proactive dialogue with anti-hallucination guardrails
+    2. Conversation history management
+    3. Per-turn conversation state summarization (→ shared state / Blackboard)
+    4. Final response synthesis from retrieved papers
     """
 
     def __init__(self, api_key: str, base_url: str = "https://api.deepseek.com",
@@ -186,84 +226,188 @@ class PaperQAAgent:
         self.llm = LLMClient(api_key=api_key, base_url=base_url, model=model,
                              temperature=temperature, max_tokens=max_tokens)
         self.max_abstract_chars = max_abstract_chars
-        logger.info("PaperQAAgent: model=%s", model)
+        logger.info("PaperQAAgent init: model=%s", model)
+
+    # ---------------------------------------------------------------
+    # Entry point 1: respond — main conversation + answer synthesis
+    # ---------------------------------------------------------------
 
     def respond(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate response based on papers already in state (from rank/retrieval).
-        Planner has already decided intent; papers are in final_papers or ranked_papers.
-        """
+        """Generate response based on retrieved papers + conversation history.
+        Uses the unified prompt — no intent-specific template switching."""
         query = state.get("user_query", "")
-        intent = state.get("qa_intent", "general")
         history = state.get("history", [])
         papers = state.get("final_papers") or state.get("ranked_papers") or []
         cited = dict(state.get("cited_papers", {}))
 
-        context = self._build_paper_context(papers)
-        for i, p in enumerate(papers):
-            cited[f"[{i+1}]"] = p
-
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        prompt = INTENT_PROMPTS.get(intent, QA_PROMPT)
-        if papers and prompt:
-            messages.append({"role": "system", "content": prompt.format(context=context)})
+
+        is_first_turn = not history and not state.get("profile_asked", False)
+        if is_first_turn:
+            messages.append({
+                "role": "system",
+                "content": FIRST_TURN_PROFILE_PROMPT,
+            })
+
+        retrieval_insufficient = state.get("retrieval_insufficient", False)
+        if retrieval_insufficient:
+            retry_count = state.get("retrieval_retry_count", 0)
+            messages.append({
+                "role": "system",
+                "content": (
+                    f"[System note: The retrieval system searched {retry_count + 1} time(s) "
+                    f"but could not find papers that closely match the user's query. "
+                    f"The papers below are the best available but may not be an ideal match. "
+                    f"You MUST acknowledge this to the user honestly — for example: "
+                    f"'I wasn't able to find papers that perfectly match your query, "
+                    f"but here are the closest results I found. "
+                    f"You could try rephrasing your query or providing more specific keywords.' "
+                    f"Still cite and discuss whatever papers are available, but set expectations.]"
+                ),
+            })
+
+        decision = state.get("planner_decision") or {}
+        did_online = decision.get("do_online_search", False)
+        online_count = len(state.get("online_search_result") or [])
+        if did_online:
+            online_note = (
+                f"[System note: An online search (ArXiv) was performed for this query "
+                f"and returned {online_count} paper(s). "
+                + ("These are included in the papers below." if online_count > 0
+                   else "No results were found online; only local papers are shown.")
+                + "]"
+            )
+            messages.append({"role": "system", "content": online_note})
+
+        if papers:
+            context = self._build_paper_context(papers)
+            for i, p in enumerate(papers):
+                cited[f"[{i+1}]"] = p
+            messages.append({
+                "role": "system",
+                "content": PAPER_CONTEXT_BLOCK.format(context=context),
+            })
+            messages.append({
+                "role": "system",
+                "content": RECOMMENDATION_INSTRUCTION.format(user_query=query),
+            })
+
         for m in history:
-            messages.append({"role": m.get("role", "user"), "content": m.get("content", "")})
+            messages.append({"role": m.get("role", "user"),
+                             "content": m.get("content", "")})
         if not history or history[-1].get("content") != query:
             messages.append({"role": "user", "content": query})
 
         response_text = self.llm.chat(messages)
 
-        new_history = list(history)
-        if not new_history or new_history[-1].get("content") != query:
-            new_history.append({"role": "user", "content": query})
-        new_history.append({"role": "assistant", "content": response_text,
-                            "metadata": {"intent": intent, "num_papers": len(papers)}})
-        _trim_history(new_history)
+        new_history = self._append_and_trim(
+            history, query, response_text, {"num_papers": len(papers)},
+        )
+        conv_state = self._summarize_conversation_state(new_history)
 
-        return {
+        result = {
             **state,
             "response": response_text,
             "history": new_history,
             "cited_papers": cited,
+            "conversation_state": conv_state,
         }
+        if is_first_turn:
+            result["profile_asked"] = True
+        return result
+
+    # ---------------------------------------------------------------
+    # Entry point 2: ask_profile — proactively gather user interests
+    # ---------------------------------------------------------------
 
     def ask_profile(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate a question asking the user about their research interests."""
-        history = state.get("history", [])
+        """Proactively ask user to clarify their request — research interests,
+        preferred topics, time range, or other specifics."""
         query = state.get("user_query", "")
+        history = state.get("history", [])
+        is_first_turn = not history and not state.get("profile_asked", False)
 
-        messages = [
-            {"role": "system", "content": PROACTIVE_ASK_PROMPT},
-        ]
+        planner_reasoning = ""
+        decision = state.get("planner_decision") or {}
+        if decision.get("reasoning"):
+            planner_reasoning = f"\nPlanner note: {decision['reasoning']}"
+
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+        if is_first_turn:
+            messages.append({
+                "role": "system",
+                "content": (
+                    "This is the very FIRST message in the conversation. The user's request "
+                    "is vague and lacks detail. Your goals:\n"
+                    "1. Greet them warmly.\n"
+                    "2. Ask about their PURPOSE — why they need papers. From their answer "
+                    "you can naturally infer their field, level, and needs.\n"
+                    "3. Keep it conversational and brief (2-3 sentences).\n\n"
+                    "Example approaches:\n"
+                    "- \"你好！我可以帮你找论文。方便说一下你找论文是为了什么吗？"
+                    "比如写论文、做课程作业、还是工作上的项目？这样我能更有针对性地推荐。\"\n"
+                    "- \"Hi! I'd love to help. Are you looking for papers for a research "
+                    "project, a class assignment, or exploring a new area? "
+                    "That helps me know what depth and style to aim for.\"\n\n"
+                    "Do NOT make up papers. Just ask about their goal."
+                    f"{planner_reasoning}"
+                ),
+            })
+        else:
+            messages.append({
+                "role": "system",
+                "content": (
+                    "The user's request lacks enough detail to proceed with paper search. "
+                    "Your job: ask 1-2 SHORT, SPECIFIC follow-up questions to understand "
+                    "what they need. Be warm and conversational.\n\n"
+                    "Good examples of follow-up questions:\n"
+                    "- \"Sure! What research area are you interested in? "
+                    "For example: NLP, computer vision, reinforcement learning, LLMs...?\"\n"
+                    "- \"I'd love to help! Are you looking for survey papers, "
+                    "recent methods, or something specific like a comparison?\"\n"
+                    "- \"Got it — any preference on time range? "
+                    "Like papers from the last year, or classic foundational work?\"\n\n"
+                    "Do NOT make up papers or topics. Just ask what they want.\n"
+                    "Keep your response under 3 sentences."
+                    f"{planner_reasoning}"
+                ),
+            })
+
         for m in history:
-            messages.append({"role": m.get("role", "user"), "content": m.get("content", "")})
+            messages.append({"role": m.get("role", "user"),
+                             "content": m.get("content", "")})
         if query and (not history or history[-1].get("content") != query):
             messages.append({"role": "user", "content": query})
 
         response_text = self.llm.chat(messages)
 
-        new_history = list(history)
-        if query and (not new_history or new_history[-1].get("content") != query):
-            new_history.append({"role": "user", "content": query})
-        new_history.append({"role": "assistant", "content": response_text,
-                            "metadata": {"action": "ask_profile"}})
-        _trim_history(new_history)
+        new_history = self._append_and_trim(
+            history, query, response_text, {"action": "ask_profile"},
+        )
+        conv_state = self._summarize_conversation_state(new_history)
 
-        return {
+        result = {
             **state,
             "response": response_text,
             "history": new_history,
             "needs_profile_clarification": True,
+            "conversation_state": conv_state,
         }
+        if is_first_turn:
+            result["profile_asked"] = True
+        return result
+
+    # ---------------------------------------------------------------
+    # Entry point 3: handle_feedback — process feedback on recs
+    # ---------------------------------------------------------------
 
     def handle_feedback(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Process user feedback. If vague, ask for clarification.
-        If substantive, update profile and offer to re-recommend.
-        """
+        """Process user feedback. Clarify if vague; update profile if substantive."""
         feedback = (state.get("user_feedback") or "").strip()
-        profile = state.get("user_profile") or UserProfile(user_id=state.get("user_id", "anonymous"))
+        profile = state.get("user_profile") or UserProfile(
+            user_id=state.get("user_id", "anonymous"),
+        )
         history = state.get("history", [])
 
         is_vague = len(feedback.split()) < 4 or feedback.lower() in (
@@ -272,38 +416,53 @@ class PaperQAAgent:
 
         new_history = list(history)
         if feedback:
-            new_history.append({"role": "user", "content": feedback})
+            new_history.append({
+                "role": "user", "content": feedback, "timestamp": time.time(),
+            })
 
         if is_vague:
-            messages = [{"role": "system", "content": FEEDBACK_CLARIFY_PROMPT}]
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            messages.append({
+                "role": "system",
+                "content": (
+                    "The user gave vague or brief feedback on the previous "
+                    "recommendation. Follow the Proactiveness guidelines: "
+                    "ask them to clarify what topics they'd prefer, what was "
+                    "wrong, or which direction to explore. Be warm and concise."
+                ),
+            })
             for m in new_history:
-                messages.append({"role": m.get("role", "user"), "content": m.get("content", "")})
+                messages.append({"role": m.get("role", "user"),
+                                 "content": m.get("content", "")})
             response_text = self.llm.chat(messages)
-            new_history.append({"role": "assistant", "content": response_text,
-                                "metadata": {"action": "feedback_clarify"}})
+            new_history.append({
+                "role": "assistant", "content": response_text,
+                "timestamp": time.time(),
+                "metadata": {"action": "feedback_clarify"},
+            })
             _trim_history(new_history)
+            conv_state = self._summarize_conversation_state(new_history)
             return {
                 **state,
                 "response": response_text,
                 "history": new_history,
                 "needs_profile_clarification": True,
                 "user_feedback": "",
+                "conversation_state": conv_state,
             }
 
-        # Substantive feedback: update profile
-        profile.special_requirements = profile.special_requirements or []
-        for w in feedback.split():
-            if len(w) > 2 and w not in profile.special_requirements:
-                profile.special_requirements.append(w)
-        if profile.interest_text and feedback not in profile.interest_text:
-            profile.interest_text = profile.interest_text + " " + feedback
-        elif not profile.interest_text:
-            profile.interest_text = feedback
-
-        response_text = "I've updated your preferences. Would you like me to recommend papers again with these interests?"
-        new_history.append({"role": "assistant", "content": response_text,
-                            "metadata": {"action": "feedback_applied"}})
+        _apply_feedback_to_profile(profile, feedback)
+        response_text = (
+            "Got it — I've noted your preferences. "
+            "Want me to recommend papers again with these updated interests?"
+        )
+        new_history.append({
+            "role": "assistant", "content": response_text,
+            "timestamp": time.time(),
+            "metadata": {"action": "feedback_applied"},
+        })
         _trim_history(new_history)
+        conv_state = self._summarize_conversation_state(new_history)
 
         return {
             **state,
@@ -311,7 +470,46 @@ class PaperQAAgent:
             "history": new_history,
             "user_profile": profile,
             "user_feedback": "",
+            "conversation_state": conv_state,
         }
+
+    # ---------------------------------------------------------------
+    # Conversation state summarization (Responsibility 3)
+    # ---------------------------------------------------------------
+
+    def _summarize_conversation_state(self, history: List[Dict]) -> Dict[str, Any]:
+        """Extract structured conversation state from recent history via LLM.
+        Result is written to shared state so other agents (planner, retrieval)
+        can read it on the next turn."""
+        if not history:
+            return _empty_conversation_state()
+
+        recent = history[-10:]
+        history_text = "\n".join(
+            f"{m.get('role', 'user').upper()}: {m.get('content', '')}"
+            for m in recent
+        )
+
+        try:
+            raw = self.llm.chat(
+                [{"role": "system",
+                  "content": STATE_SUMMARY_PROMPT.format(history_text=history_text)}],
+                temperature=0.1,
+                max_tokens=512,
+            )
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            state = json.loads(raw)
+            logger.info("Conversation state summary: %s", state.get("summary", ""))
+            return state
+        except (json.JSONDecodeError, Exception) as e:
+            logger.warning("Failed to parse conversation state: %s", e)
+            return _empty_conversation_state()
+
+    # ---------------------------------------------------------------
+    # Internal helpers
+    # ---------------------------------------------------------------
 
     def _build_paper_context(self, papers: List[Paper]) -> str:
         if not papers:
@@ -326,17 +524,65 @@ class PaperQAAgent:
                 authors += f" et al. ({len(p.authors)} authors)"
             cats = " | ".join(p.categories)
             date = p.published or "N/A"
+            score_line = f"     Relevance score: {p.score:.4f}\n" if p.score else ""
             parts.append(
                 f"[{i+1}] {p.title}\n"
                 f"     Authors: {authors}\n"
                 f"     Categories: {cats} | Date: {date}\n"
+                f"{score_line}"
                 f"     Abstract: {abstract}\n"
             )
         return "\n".join(parts)
 
+    def _append_and_trim(self, history: List[Dict], query: str,
+                         response: str, metadata: Dict = None) -> List[Dict]:
+        """Append user query + assistant response to history, then trim."""
+        new_history = list(history)
+        if query and (not new_history or new_history[-1].get("content") != query):
+            new_history.append({
+                "role": "user", "content": query, "timestamp": time.time(),
+            })
+        new_history.append({
+            "role": "assistant", "content": response,
+            "timestamp": time.time(), "metadata": metadata or {},
+        })
+        _trim_history(new_history)
+        return new_history
 
-def _trim_history(history: List[Dict], max_turns: int = 20, max_chars: int = 60000):
-    """Trim history list in-place."""
+
+# ---------------------------------------------------------------------------
+# Module-level helpers
+# ---------------------------------------------------------------------------
+
+def _empty_conversation_state() -> Dict[str, Any]:
+    return {
+        "user_intent": "general",
+        "research_topics": [],
+        "keywords": [],
+        "time_preference": None,
+        "venue_preference": [],
+        "papers_discussed": [],
+        "user_satisfaction": "unknown",
+        "open_questions": "",
+        "summary": "",
+    }
+
+
+def _apply_feedback_to_profile(profile: UserProfile, feedback: str):
+    """Update profile fields from substantive feedback text."""
+    profile.special_requirements = profile.special_requirements or []
+    for w in feedback.split():
+        if len(w) > 2 and w not in profile.special_requirements:
+            profile.special_requirements.append(w)
+    if profile.interest_text and feedback not in profile.interest_text:
+        profile.interest_text = profile.interest_text + " " + feedback
+    elif not profile.interest_text:
+        profile.interest_text = feedback
+
+
+def _trim_history(history: List[Dict], max_turns: int = 20,
+                  max_chars: int = 60000):
+    """Trim history list in-place to stay within limits."""
     if len(history) > max_turns * 2:
         del history[:len(history) - max_turns * 2]
     total = sum(len(m.get("content", "")) for m in history)
