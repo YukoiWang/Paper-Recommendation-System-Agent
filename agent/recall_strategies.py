@@ -9,6 +9,25 @@ from agent.models import Paper, UserProfile
 logger = logging.getLogger(__name__)
 
 
+def reciprocal_rank_fusion(
+    *ranked_lists: List[Tuple[str, float]],
+    k: int = 60,
+    top_n: Optional[int] = None,
+) -> List[Tuple[str, float]]:
+    """
+    RRF: score(d) = sum over lists of 1/(k + rank(d)).
+    Each ranked_list is [(id, score), ...] sorted by score descending (rank 0 = first).
+    """
+    rrf_scores: Dict[str, float] = {}
+    for rlist in ranked_lists:
+        for rank, (pid, _) in enumerate(rlist, start=1):
+            rrf_scores[pid] = rrf_scores.get(pid, 0.0) + 1.0 / (k + rank)
+    sorted_items = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+    if top_n is not None:
+        sorted_items = sorted_items[:top_n]
+    return sorted_items
+
+
 def vector_recall(user_vector: np.ndarray, store: Any,
                   top_k: int = 50, threshold: float = -1.0,
                   exclude_ids: Optional[Set[str]] = None) -> List[Tuple[str, float]]:
@@ -62,7 +81,10 @@ def itemcf_recall(user: UserProfile, store: Any,
 
 
 def merge_results(*recall_lists: List[Tuple[str, float]],
-                  top_k: int = 30) -> List[Tuple[str, float]]:
+                  top_k: int = 30,
+                  method: str = "score_sum") -> List[Tuple[str, float]]:
+    if method == "rrf":
+        return reciprocal_rank_fusion(*recall_lists, k=60, top_n=top_k)
     merged: Dict[str, float] = {}
     for rlist in recall_lists:
         for pid, sc in rlist:

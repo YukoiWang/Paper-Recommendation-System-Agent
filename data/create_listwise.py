@@ -8,7 +8,7 @@ Listwise data generation script (RAG + paper API + weighted scoring).
    - Negatives: 3 from similarity top 10%-40% (not cited), 1 from similarity 70%+ (not cited).
 3. Label = weighted: 0.6 * cited + 0.3 * cosine_sim + 0.1 * llm_score_norm (weights configurable).
 4. Each sample includes current_paper: {id, title, abstract} (the seed paper being viewed).
-5. Default output: /tmp/listwise_data/listwise_output.json. Mode (test/formal) unchanged.
+5. Default output: ~/listwise_data/listwise_output.json. Mode (test/formal) unchanged.
 6. 支持多进程并行 (-j)，因含 LLM 调用建议 -j 4 左右，避免 API 限流。
 """
 import json
@@ -94,7 +94,7 @@ NUM_SAMPLES = 5
 TEST_NUM_SAMPLES = 2
 
 # Default output path
-DEFAULT_OUTPUT_PATH = "/tmp/listwise_data/listwise_output.json"
+DEFAULT_OUTPUT_PATH = os.path.expanduser("~/listwise_data/listwise_output.json")
 
 
 # -----------------------------------------------------------------------------

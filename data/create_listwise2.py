@@ -95,7 +95,7 @@ NUM_SAMPLES = 5
 TEST_NUM_SAMPLES = 2
 
 # Default output path
-DEFAULT_OUTPUT_PATH = "/tmp/listwise_data/listwise_3.json"
+DEFAULT_OUTPUT_PATH = os.path.expanduser("~/listwise_data/listwise_3.json")
 
 
 # -----------------------------------------------------------------------------

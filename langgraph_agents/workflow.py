@@ -210,6 +210,71 @@ def build_workflow(
         """QA: process user feedback."""
         return qa.handle_feedback(state)
 
+    def no_retrieval_gate_node(state: WorkflowState) -> WorkflowState:
+        """For NO_RETRIEVAL answers, decide whether to fallback to retrieval.
+
+        Signals (written by PaperQAAgent.respond):
+          - no_retrieval_confidence: float in [0,1] from logprobs, or None
+          - no_retrieval_logprobs_available: bool
+          - no_retrieval_verbal_flag: bool, True if model emitted [[NEED_RETRIEVAL]]
+        """
+        decision = state.get("planner_decision") or {}
+        plan = state.get("plan") or {}
+        route = decision.get("route", ROUTE_NO_RETRIEVAL)
+
+        # Safety guard: only act when planner originally chose NO_RETRIEVAL and we
+        # truly have no retrieved papers in this pass.
+        if route != ROUTE_NO_RETRIEVAL:
+            return state
+        if state.get("final_papers") or state.get("retrieval_result") or state.get("fused_candidates"):
+            return state
+
+        # Configuration: threshold can be overridden via state.
+        threshold = float(state.get("no_retrieval_confidence_threshold", 0.6))
+        conf = state.get("no_retrieval_confidence")
+        has_logprobs = bool(state.get("no_retrieval_logprobs_available", False))
+        verbal_flag = bool(state.get("no_retrieval_verbal_flag", False))
+        query = state.get("user_query", "")
+        answer = state.get("response", "")
+
+        # Method 3: explicit verbalized uncertainty wins immediately.
+        if verbal_flag or ("[[NEED_RETRIEVAL]]" in (answer or "")):
+            decision["route"] = ROUTE_RETRIEVE_LOCAL
+            plan["route"] = ROUTE_RETRIEVE_LOCAL
+            state["planner_decision"] = decision
+            state["plan"] = plan
+            state["forced_retrieval_reason"] = "verbal_flag"
+            return state
+
+        # Method 1: logprobs-based confidence when available.
+        if has_logprobs and conf is not None:
+            state["forced_retrieval_reason"] = "logprob_ok"
+            if conf < threshold:
+                decision["route"] = ROUTE_RETRIEVE_LOCAL
+                plan["route"] = ROUTE_RETRIEVE_LOCAL
+                state["forced_retrieval_reason"] = f"logprob_below_threshold:{conf:.3f}"
+            state["planner_decision"] = decision
+            state["plan"] = plan
+            return state
+
+        # Method 2: self-reflection evaluation as fallback when logprobs missing.
+        try:
+            label = qa.evaluate_no_retrieval_answer(query=query, answer=answer)
+        except Exception as e:
+            logger.warning("no_retrieval_gate: self-reflection failed: %s", e)
+            label = "HIGH_CONFIDENCE"
+
+        if isinstance(label, str) and label.upper().strip() == "LOW_CONFIDENCE":
+            decision["route"] = ROUTE_RETRIEVE_LOCAL
+            plan["route"] = ROUTE_RETRIEVE_LOCAL
+            state["forced_retrieval_reason"] = "self_reflection_low"
+        else:
+            state["forced_retrieval_reason"] = "self_reflection_high"
+
+        state["planner_decision"] = decision
+        state["plan"] = plan
+        return state
+
     # ------------------------------------------------------------------
     # Build graph
     # ------------------------------------------------------------------
@@ -225,6 +290,7 @@ def build_workflow(
     workflow.add_node("fuse", fuse_node)
     workflow.add_node("rank", rank_node)
     workflow.add_node("respond", respond_node)
+    workflow.add_node("no_retrieval_gate", no_retrieval_gate_node)
     workflow.add_node("ask_clarify", ask_clarify_node)
     workflow.add_node("handle_feedback", handle_feedback_node)
 
@@ -316,8 +382,48 @@ def build_workflow(
     workflow.add_edge("recall", "rank")
     workflow.add_edge("rank", "respond")
 
+    def after_respond(state: WorkflowState) -> str:
+        """After QA responds, decide whether to run NO_RETRIEVAL gate.
+
+        - If this was a retrieval/recall path (papers present) → END.
+        - If planner route was NO_RETRIEVAL and there are no papers → gate.
+        """
+        decision = state.get("planner_decision") or {}
+        route = decision.get("route", ROUTE_NO_RETRIEVAL)
+
+        if state.get("final_papers") or state.get("ranked_papers") or state.get("retrieval_result") or state.get("fused_candidates"):
+            return "end"
+
+        if route == ROUTE_NO_RETRIEVAL:
+            return "no_retrieval_gate"
+
+        return "end"
+
+    workflow.add_conditional_edges("respond", after_respond, {
+        "no_retrieval_gate": "no_retrieval_gate",
+        "end": END,
+    })
+
+    def after_no_retrieval_gate(state: WorkflowState) -> str:
+        """After NO_RETRIEVAL gate, either fallback to retrieval or finish."""
+        decision = state.get("planner_decision") or {}
+        route = decision.get("route", ROUTE_NO_RETRIEVAL)
+
+        if route == ROUTE_RETRIEVE_LOCAL:
+            plan = state.get("plan", {})
+            if plan.get("do_online_search") or state.get("is_daily_rec"):
+                return "online_search"
+            return "retrieval"
+
+        return "end"
+
+    workflow.add_conditional_edges("no_retrieval_gate", after_no_retrieval_gate, {
+        "online_search": "online_search",
+        "retrieval": "retrieval",
+        "end": END,
+    })
+
     # terminal nodes
-    workflow.add_edge("respond", END)
     workflow.add_edge("ask_clarify", END)
     workflow.add_edge("handle_feedback", END)
 

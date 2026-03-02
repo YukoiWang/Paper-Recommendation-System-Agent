@@ -4,10 +4,10 @@
 
 用法:
   cd /path/to/Paper-Recommendation-System-Agent
-  source /tmp/paper-rec-venv/bin/activate
-  python data/prefetch_paper_cache.py -o /tmp/listwise_cache -n 10000
+  source ~/paper-rec-venv/bin/activate
+  python data/prefetch_paper_cache.py -o ~/listwise_cache -n 10000
 
-完成后运行 create_listwise2 时加 --cache-dir /tmp/listwise_cache
+完成后运行 create_listwise2 时加 --cache-dir ~/listwise_cache
 """
 import argparse
 import os
@@ -41,8 +41,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="预拉取引用和元数据到本地缓存，供 create_listwise2 加速"
     )
-    parser.add_argument("-o", "--out", type=str, default="/tmp/listwise_cache",
-                        help="缓存目录 (default: /tmp/listwise_cache)")
+    parser.add_argument("-o", "--out", type=str, default=os.path.expanduser("~/listwise_cache"),
+                        help="缓存目录 (default: ~/listwise_cache)")
     parser.add_argument("-n", "--num", type=int, default=10000,
                         help="最多处理多少篇 RAG 论文 (default: 10000)")
     parser.add_argument("--chroma-path", type=str, default="",
@@ -50,7 +50,7 @@ def main():
     args = parser.parse_args()
 
     cache = PaperCache(args.out)
-    chroma_path = args.chroma_path or os.getenv("CHROMA_PERSIST_DIR", "/tmp/chroma_db")
+    chroma_path = args.chroma_path or os.getenv("CHROMA_PERSIST_DIR") or os.path.expanduser("~/chroma_db")
 
     print(f"[prefetch] 缓存目录: {args.out}")
     print(f"[prefetch] 目标: 最多 {args.num} 篇 RAG 论文")

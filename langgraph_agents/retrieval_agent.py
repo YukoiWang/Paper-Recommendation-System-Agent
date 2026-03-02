@@ -1,8 +1,10 @@
-"""Retrieval agent: query -> vector retrieval only. Extracted from agent/retrieval_agent."""
+"""Retrieval agent: query -> HyDE (optional) + vector + BM25 hybrid, RRF fusion. QA path: no history filter."""
 from __future__ import annotations
 import logging
+import os
+import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 import sys
@@ -13,15 +15,20 @@ if str(_root) not in sys.path:
 from agent.models import Paper, UserProfile
 from agent.embedder import create_embedder
 from agent.vector_store import create_vector_store, ChromaDBVectorStore
-from agent.recall_strategies import vector_recall
+from agent.recall_strategies import vector_recall, reciprocal_rank_fusion
 
 logger = logging.getLogger(__name__)
+
+try:
+    from rank_bm25 import BM25Okapi
+except ImportError:
+    BM25Okapi = None  # type: ignore
 
 
 class RetrievalAgent:
     """
-    Thin retrieval: index papers, then retrieve by query using vector_recall only.
-    Supports multiple backends: numpy, lancedb, or chromadb (read-only, 108万 papers).
+    Query-driven retrieval: optional HyDE (caller provides), vector + BM25 hybrid, RRF fusion.
+    QA path: do not filter by read/block.
     """
 
     def __init__(
@@ -32,12 +39,20 @@ class RetrievalAgent:
         vector_store_backend: str = "numpy",
         vector_store_path: str = "./.lancedb_index",
         top_k_vector: int = 50,
-        chromadb_path: str = "/tmp/chroma_db",
+        chromadb_path: str = None,
         collection_name: str = "papers",
+        use_bm25: bool = True,
+        rrf_k: int = 60,
     ):
+        if chromadb_path is None:
+            chromadb_path = os.path.expanduser("~/chroma_db")
         self._vs_backend = vector_store_backend
         self._vs_path = vector_store_path
         self._use_chromadb = (vector_store_backend == "chromadb")
+        self._use_bm25 = use_bm25 and (BM25Okapi is not None) and not self._use_chromadb
+        self._rrf_k = rrf_k
+        self._bm25_index: Any = None
+        self._bm25_ids: List[str] = []
 
         if self._use_chromadb:
             logger.info("RetrievalAgent: using ChromaDB at %s", chromadb_path)
@@ -67,6 +82,18 @@ class RetrievalAgent:
         self._cache: Dict[str, Paper] = {}
         self.top_k_vector = top_k_vector
 
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        return re.findall(r"\w+", (text or "").lower())
+
+    def _build_bm25(self, ids: List[str], texts: List[str]) -> None:
+        if not self._use_bm25 or BM25Okapi is None or not ids:
+            return
+        corpus = [self._tokenize(t) for t in texts]
+        self._bm25_index = BM25Okapi(corpus)
+        self._bm25_ids = ids
+        logger.info("BM25 index built: %s docs", len(ids))
+
     def index_papers(self, papers: List[Paper]) -> int:
         if self._use_chromadb:
             logger.info("ChromaDB mode: skipping index_papers (data already loaded)")
@@ -87,6 +114,7 @@ class RetrievalAgent:
         for p, vec in zip(papers, vectors):
             p.embedding = vec
             self._cache[p.paper_id] = p
+        self._build_bm25(ids, texts)
         logger.info("Indexed %s papers (total: %s)", added, self.store.size)
         return added
 
@@ -113,8 +141,9 @@ class RetrievalAgent:
         added = self.store.add(ids, vectors)
         for p in valid:
             self._cache[p.paper_id] = p
+        texts = [p.text_for_embedding() for p in valid]
+        self._build_bm25(ids, texts)
         if not self._is_fitted:
-            texts = [p.text_for_embedding() for p in valid]
             self.embedder.fit(texts)
             self._is_fitted = True
             logger.info("Embedder fitted for query encoding")
@@ -125,9 +154,15 @@ class RetrievalAgent:
         self,
         query: str,
         top_k: int = 10,
+        hyde_document: Optional[str] = None,
     ) -> List[Paper]:
+        """
+        QA path: use hyde_document for vector encoding if provided (short-query HyDE from planner);
+        BM25 always uses the original query. RRF fuses dense + sparse when both available.
+        """
+        vector_query = (hyde_document or "").strip() or query
         try:
-            query_vec = self.embedder.encode(query)
+            query_vec = self.embedder.encode(vector_query)
         except Exception as e:
             logger.warning("Encode failed: %s", e)
             return []
@@ -150,9 +185,30 @@ class RetrievalAgent:
             logger.info("retrieve_by_query (ChromaDB): %s papers (top_k=%s)", len(papers), top_k)
             return papers
 
-        results = vector_recall(query_vec, self.store, top_k=top_k * 3)
+        fetch_k = max(top_k * 2, 40)
+        dense_results = vector_recall(query_vec, self.store, top_k=fetch_k)
+
+        if self._bm25_index and self._bm25_ids and query.strip():
+            q_tokens = self._tokenize(query)
+            if q_tokens:
+                bm25_scores = self._bm25_index.get_scores(q_tokens)
+                sparse_results: List[Tuple[str, float]] = [
+                    (self._bm25_ids[i], float(bm25_scores[i]))
+                    for i in range(len(self._bm25_ids))
+                    if bm25_scores[i] > 0
+                ]
+                sparse_results.sort(key=lambda x: x[1], reverse=True)
+                sparse_results = sparse_results[:fetch_k]
+                fused = reciprocal_rank_fusion(
+                    dense_results, sparse_results, k=self._rrf_k, top_n=top_k
+                )
+            else:
+                fused = dense_results[:top_k]
+        else:
+            fused = dense_results[:top_k]
+
         papers = []
-        for pid, score in results[:top_k]:
+        for pid, score in fused:
             paper = self._cache.get(pid)
             if paper:
                 papers.append(Paper(
@@ -160,7 +216,7 @@ class RetrievalAgent:
                     authors=paper.authors, categories=paper.categories, published=paper.published,
                     score=score,
                 ))
-        logger.info("retrieve_by_query: %s papers (top_k=%s)", len(papers), top_k)
+        logger.info("retrieve_by_query: %s papers (top_k=%s, hyde=%s)", len(papers), top_k, bool(hyde_document))
         return papers
 
     def save_index(self, path: str | Path) -> None:

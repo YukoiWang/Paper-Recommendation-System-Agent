@@ -66,6 +66,8 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "loguru>=0.7.2",
     "tqdm>=4.66.1",
+    "bitarray>=2.8.0",
+    "rank-bm25>=0.2.2",
     
     # Frontend (Streamlit)
     "streamlit>=1.28.1",

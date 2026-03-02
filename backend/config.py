@@ -1,6 +1,7 @@
 """
 Configuration management using Pydantic Settings
 """
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
@@ -35,7 +36,7 @@ class Settings(BaseSettings):
     
     # Vector Database
     VECTOR_DB_TYPE: str = "chroma"  # chroma or milvus
-    CHROMA_PERSIST_DIR: str = "/tmp/chroma_db"
+    CHROMA_PERSIST_DIR: str = os.path.expanduser("~/chroma_db")
     MILVUS_HOST: str = "localhost"
     MILVUS_PORT: int = 19530
     

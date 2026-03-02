@@ -361,6 +361,36 @@ class PlannerAgent:
         return True
 
     # -----------------------------------------------------------------
+    # HyDE (Hypothetical Document Embeddings) for short queries
+    # -----------------------------------------------------------------
+
+    HYDE_PROMPT = """Write a short academic abstract (2-3 sentences) that would answer the following question. Output only the abstract, no preamble or labels.
+
+Question: {query}
+
+Abstract:"""
+
+    @staticmethod
+    def _is_short_query(query: str, max_chars: int = 20, max_words: int = 5) -> bool:
+        """Return True if query is short enough to benefit from HyDE expansion."""
+        s = (query or "").strip()
+        return len(s) < max_chars or len(s.split()) < max_words
+
+    def _generate_hyde_document(self, query: str) -> Optional[str]:
+        """Generate hypothetical document for HyDE (short-query vector alignment)."""
+        if not self._llm or not (query or "").strip():
+            return None
+        prompt = self.HYDE_PROMPT.format(query=(query or "").strip())
+        try:
+            doc = self._llm.call(prompt, temperature=0.2, max_tokens=256)
+            if doc and len(doc.strip()) > 10:
+                logger.info("HyDE generated (%d chars) for short query", len(doc.strip()))
+                return doc.strip()
+        except Exception as e:
+            logger.warning("HyDE generation failed: %s", e)
+        return None
+
+    # -----------------------------------------------------------------
     # Core capability 1: Query understanding & optimization
     # -----------------------------------------------------------------
 
@@ -905,6 +935,12 @@ class PlannerAgent:
         # ============================================================
         # Write to state
         # ============================================================
+        # HyDE: for short queries on retrieval path, generate hypothetical doc for vector encoding.
+        if route == ROUTE_RETRIEVE_LOCAL and self._is_short_query(final_query):
+            state["hyde_document"] = self._generate_hyde_document(final_query) or ""
+        else:
+            state["hyde_document"] = ""
+
         do_online = wants_latest or state.get("is_daily_rec", False)
         decision = {
             "route": route,

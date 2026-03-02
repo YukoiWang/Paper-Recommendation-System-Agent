@@ -7,13 +7,13 @@ BGE Reranker LoRA Finetune + Evaluation Comparison
 
 用法:
   # LoRA 微调 + 评估对比
-  python data/bge_reranking_train.py --data /tmp/listwise_data/listwise_500.json
+  python data/bge_reranking_train.py --data ~/listwise_data/listwise_500.json
 
   # 加上 LLM 对比（需设 DEEPSEEK_API_KEY）
-  python data/bge_reranking_train.py --data /tmp/listwise_data/listwise_500.json --eval-llm
+  python data/bge_reranking_train.py --data ~/listwise_data/listwise_500.json --eval-llm
 
   # 全参数微调（不用 LoRA）
-  python data/bge_reranking_train.py --data /tmp/listwise_data/listwise_500.json --no-lora
+  python data/bge_reranking_train.py --data ~/listwise_data/listwise_500.json --no-lora
 """
 from __future__ import annotations
 

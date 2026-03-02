@@ -42,8 +42,9 @@ logger = logging.getLogger(__name__)
 
 
 def _build_agents(api_key: str, top_k: int, use_chromadb: bool = False,
-                   chromadb_path: str = "/tmp/chroma_db",
+                   chromadb_path: str = None,
                    embedding_model: str = "BAAI/bge-base-en-v1.5"):
+    chromadb_path = chromadb_path or os.path.expanduser("~/chroma_db")
     from langgraph_agents import (
         RetrievalAgent, RecallAgent, OnlineSearchAgent,
         RankAgent, PaperQAAgent, PlannerAgent,
@@ -232,7 +233,7 @@ def main():
     parser.add_argument("--interest", default="machine learning", help="User interest text")
     parser.add_argument("--chat", action="store_true", help="Interactive chat mode")
     parser.add_argument("--chromadb", action="store_true", help="Use existing ChromaDB (108万 papers)")
-    parser.add_argument("--chromadb-path", default="/tmp/chroma_db", help="Path to ChromaDB")
+    parser.add_argument("--chromadb-path", default=os.path.expanduser("~/chroma_db"), help="Path to ChromaDB")
     parser.add_argument("--embedding-model", default="BAAI/bge-base-en-v1.5", help="Embedding model for ChromaDB queries")
     parser.add_argument("--log-level", default="WARNING", help="Logging level for chat mode")
     args = parser.parse_args()

@@ -34,6 +34,8 @@ class UserProfile:
     followed_authors: List[str] = field(default_factory=list)
     preferred_categories: List[str] = field(default_factory=list)
     special_requirements: List[str] = field(default_factory=list)  # from user feedback
+    # 用户学术/专业水平，用于 QA 调整语气：beginner | intermediate | expert | researcher
+    expertise_level: Optional[str] = None
 
 
 def is_profile_sufficient(profile: Optional[UserProfile]) -> bool:

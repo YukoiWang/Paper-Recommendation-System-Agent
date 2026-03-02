@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 import numpy as np
@@ -239,7 +240,8 @@ class LanceDBVectorStore:
 class ChromaDBVectorStore:
     """Read-only wrapper around an existing ChromaDB collection with 768-dim embeddings."""
 
-    def __init__(self, db_path: str = "/tmp/chroma_db", collection_name: str = "papers"):
+    def __init__(self, db_path: str = None, collection_name: str = "papers"):
+        db_path = db_path or os.path.expanduser("~/chroma_db")
         try:
             __import__("pysqlite3")
             import sys as _sys
@@ -350,7 +352,7 @@ def create_vector_store(
         return LanceDBVectorStore(dim=dim, db_path=db_path)
     if backend == "chromadb":
         return ChromaDBVectorStore(
-            db_path=kwargs.get("chromadb_path", "/tmp/chroma_db"),
+            db_path=kwargs.get("chromadb_path") or kwargs.get("db_path") or os.path.expanduser("~/chroma_db"),
             collection_name=kwargs.get("collection_name", "papers"),
         )
     raise ValueError(f"Unknown backend: {backend}. Use 'numpy', 'lancedb', or 'chromadb'.")

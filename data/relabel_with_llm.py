@@ -6,8 +6,8 @@ and writes a new JSON with LLM-generated labels.
 
 Usage:
     DEEPSEEK_API_KEY=sk-xxx python -u data/relabel_with_llm.py \
-        --input /tmp/listwise_data/listwise_500.json \
-        --output /tmp/listwise_data/listwise_llm_500.json
+        --input ~/listwise_data/listwise_500.json \
+        --output ~/listwise_data/listwise_llm_500.json
 """
 from __future__ import annotations
 

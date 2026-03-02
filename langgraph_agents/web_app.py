@@ -350,9 +350,10 @@ async def index():
 def init_workflow(api_key: str = "", papers_path: str = None,
                   max_papers: int = 5000, top_k: int = 8,
                   use_chromadb: bool = False,
-                  chromadb_path: str = "/tmp/chroma_db",
+                  chromadb_path: str = None,  # default: ~/chroma_db via argparse
                   embedding_model: str = "BAAI/bge-base-en-v1.5"):
     global workflow_app, retrieval_agent
+    chromadb_path = chromadb_path or os.path.expanduser("~/chroma_db")
     from langgraph_agents import (
         build_workflow, RetrievalAgent, RecallAgent,
         OnlineSearchAgent, RankAgent, PaperQAAgent, PlannerAgent,
@@ -410,7 +411,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-papers", type=int, default=5000)
     parser.add_argument("--top-k", type=int, default=8)
     parser.add_argument("--chromadb", action="store_true", help="Use existing ChromaDB")
-    parser.add_argument("--chromadb-path", default="/tmp/chroma_db")
+    parser.add_argument("--chromadb-path", default=os.path.expanduser("~/chroma_db"))
     parser.add_argument("--embedding-model", default="BAAI/bge-base-en-v1.5")
     args = parser.parse_args()
 

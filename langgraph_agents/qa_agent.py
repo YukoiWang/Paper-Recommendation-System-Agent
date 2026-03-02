@@ -19,6 +19,7 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import sys
 from pathlib import Path
 _root = str(Path(__file__).resolve().parent.parent)
@@ -49,19 +50,33 @@ class LLMClient:
         self._total_tokens = 0
         logger.info("LLMClient: model=%s", model)
 
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def chat(self, messages: List[Dict[str, str]], **kwargs):
+        """Chat completion helper.
+
+        Extra kwargs (optional):
+          - with_logprobs: bool = False  → request token-level logprobs
+          - return_raw: bool = False     → return full API response instead of text
+        """
+        with_logprobs: bool = bool(kwargs.pop("with_logprobs", False))
+        return_raw: bool = bool(kwargs.pop("return_raw", False))
         params = {
             "model": self.model,
             "messages": messages,
             "temperature": kwargs.get("temperature", self.temperature),
             "max_tokens": kwargs.get("max_tokens", self.max_tokens),
         }
+        if with_logprobs:
+            # Request token-level log probabilities when the backend supports it.
+            # Some models may ignore this field; callers must handle missing logprobs.
+            params["logprobs"] = True
         t0 = time.time()
         response = self.client.chat.completions.create(**params)
         text = (response.choices[0].message.content or "").strip()
         if response.usage:
             self._total_tokens += response.usage.total_tokens
         logger.info("LLM %.1fs, tokens=%s", time.time() - t0, self._total_tokens)
+        if return_raw:
+            return response
         return text
 
     @property
@@ -123,6 +138,52 @@ claiming you lack internet access.
 
 ## Language
 - Always respond in the same language as the user's query."""
+
+
+# ---------------------------------------------------------------------------
+# Tone / style by user expertise (adjust response tone based on user profile)
+# ---------------------------------------------------------------------------
+
+TONE_BEGINNER = """\
+## Tone for this user: Beginner-friendly
+- The user is a beginner (e.g. student, newcomer to the field). Adjust your tone accordingly:
+- Use plain, accessible language. Avoid jargon; when technical terms are necessary, briefly explain them.
+- Prefer short sentences and concrete examples. Build up concepts step by step.
+- Do NOT assume prior knowledge of advanced methods or notation. Keep explanations simple and accessible."""
+
+TONE_INTERMEDIATE = """\
+## Tone for this user: General / Intermediate
+- The user has some background. Use a balanced tone: clear but not oversimplified.
+- You may use standard terminology; briefly clarify only when it is domain-specific or ambiguous."""
+
+TONE_EXPERT = """\
+## Tone for this user: Expert / Academic
+- The user has high academic or professional level. You may use a more academic, precise style:
+- Use standard technical terminology and notation where appropriate.
+- You can discuss methodological details, limitations, and related work in a concise, expert-to-expert manner.
+- Use academic, concise phrasing; no need to simplify or avoid technical terms."""
+
+TONE_DEFAULT = """\
+## Tone for this user: Unknown level
+- No strong signal about the user's level. Use a clear, neutral tone: avoid both oversimplification and unnecessary jargon. Prefer clarity."""
+
+
+def _get_tone_instruction(state: Dict[str, Any]) -> str:
+    """Return system prompt block for tone/style based on user_profile.expertise_level or conversation_state.inferred_expertise."""
+    profile = state.get("user_profile")
+    conv = state.get("conversation_state") or {}
+    level = None
+    if profile and getattr(profile, "expertise_level", None):
+        level = (profile.expertise_level or "").strip().lower()
+    if not level and conv:
+        level = (conv.get("inferred_expertise") or "").strip().lower()
+    if level in ("beginner",):
+        return TONE_BEGINNER
+    if level in ("expert", "researcher"):
+        return TONE_EXPERT
+    if level in ("intermediate",):
+        return TONE_INTERMEDIATE
+    return TONE_DEFAULT
 
 
 FIRST_TURN_PROFILE_PROMPT = """\
@@ -236,8 +297,11 @@ Return exactly this structure:
   "papers_discussed": ["title or short id of papers already discussed"],
   "user_satisfaction": "satisfied | neutral | unsatisfied | unknown",
   "open_questions": "what the user still wants to know (1 sentence or empty)",
-  "summary": "1-2 sentence summary of the conversation state"
-}}"""
+  "summary": "1-2 sentence summary of the conversation state",
+  "inferred_expertise": "beginner | intermediate | expert | unknown"
+}}
+
+Infer inferred_expertise from cues: e.g. "course/assignment/introductory/just starting" -> beginner; "paper/research/thesis/PhD" -> expert; otherwise unknown."""
 
 
 # ---------------------------------------------------------------------------
@@ -266,13 +330,25 @@ class PaperQAAgent:
 
     def respond(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Generate response based on retrieved papers + conversation history.
-        Uses the unified prompt — no intent-specific template switching."""
+        Uses the unified prompt — no intent-specific template switching.
+
+        For NO_RETRIEVAL route (planner decided not to retrieve papers), this method
+        will:
+          - enable token-level logprobs (if supported by the backend) and compute a
+            confidence score from them;
+          - apply a conservative prompt that lets the model explicitly emit
+            `[[NEED_RETRIEVAL]]` when it feels uncertain.
+        These signals are written back to state for downstream routing."""
         query = state.get("user_query", "")
         history = state.get("history", [])
         papers = state.get("final_papers") or state.get("ranked_papers") or []
         cited = dict(state.get("cited_papers", {}))
 
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+        tone_block = _get_tone_instruction(state)
+        if tone_block:
+            messages.append({"role": "system", "content": tone_block})
 
         is_first_turn = not history and not state.get("profile_asked", False)
         if is_first_turn:
@@ -300,6 +376,7 @@ class PaperQAAgent:
 
         decision = state.get("planner_decision") or {}
         did_online = decision.get("do_online_search", False)
+        route = (decision.get("route") or "").upper()
         online_count = len(state.get("online_search_result") or [])
         if did_online:
             online_note = (
@@ -312,6 +389,11 @@ class PaperQAAgent:
             messages.append({"role": "system", "content": online_note})
 
         response_style = decision.get("response_style", "recommend")
+
+        # When planner chose NO_RETRIEVAL and there are no papers, we are in
+        # "bare LLM" mode. Make the model extremely conservative and allow it
+        # to verbally flag that retrieval is needed instead of guessing.
+        no_retrieval_mode = (route == "NO_RETRIEVAL" and not papers)
 
         if papers:
             context = self._build_paper_context(papers)
@@ -332,16 +414,50 @@ class PaperQAAgent:
                     "content": RECOMMENDATION_INSTRUCTION.format(user_query=query),
                 })
 
+        if no_retrieval_mode:
+            messages.append({
+                "role": "system",
+                "content": (
+                    "User asks: {query}\n"
+                    "You are answering WITHOUT external retrieval.\n"
+                    "Constraint: If the query involves specific academic papers, "
+                    "obscure data, or recent events (post-training knowledge), you "
+                    "MUST output a special token: [[NEED_RETRIEVAL]]. Do not attempt "
+                    "to guess or fabricate details. If the question can be safely "
+                    "answered from general, widely-known knowledge, you may answer "
+                    "normally without using this token."
+                ).format(query=query),
+            })
+
         for m in history:
             messages.append({"role": m.get("role", "user"),
                              "content": m.get("content", "")})
         if not history or history[-1].get("content") != query:
             messages.append({"role": "user", "content": query})
 
-        response_text = self.llm.chat(messages)
+        # Method 1: logprobs-based confidence when available and in NO_RETRIEVAL mode.
+        use_logprobs = no_retrieval_mode
+        raw_resp = None
+        logprob_confidence: Optional[float] = None
+        logprobs_available = False
+
+        if use_logprobs:
+            try:
+                raw_resp = self.llm.chat(messages, with_logprobs=True, return_raw=True)
+                response_text = (raw_resp.choices[0].message.content or "").strip()
+                logprob_confidence, logprobs_available = self._compute_logprob_confidence(raw_resp)
+            except Exception as e:
+                logger.warning("LLM logprobs unavailable or failed, falling back to text-only: %s", e)
+                raw_resp = None
+                response_text = self.llm.chat(messages)
+        else:
+            response_text = self.llm.chat(messages)
 
         if papers:
             response_text = self._append_reference_list(response_text, cited)
+
+        # Method 3 signal: explicit verbalized uncertainty token.
+        verbal_flag = "[[NEED_RETRIEVAL]]" in response_text
 
         new_history = self._append_and_trim(
             history, query, response_text, {"num_papers": len(papers)},
@@ -355,9 +471,51 @@ class PaperQAAgent:
             "cited_papers": cited,
             "conversation_state": conv_state,
         }
+
+        # Expose NO_RETRIEVAL confidence signals back to workflow.
+        if no_retrieval_mode:
+            result["no_retrieval_confidence"] = logprob_confidence
+            result["no_retrieval_logprobs_available"] = logprobs_available
+            result["no_retrieval_verbal_flag"] = verbal_flag
+
         if is_first_turn:
             result["profile_asked"] = True
         return result
+
+    @staticmethod
+    def _compute_logprob_confidence(raw_response: Any) -> tuple[Optional[float], bool]:
+        """Compute confidence score from token logprobs, if present.
+
+        Returns (confidence, available_flag). Confidence is in [0, 1] when
+        available, otherwise (None, False)."""
+        try:
+            choice = raw_response.choices[0]
+            logprobs_obj = getattr(choice, "logprobs", None)
+            if not logprobs_obj:
+                return None, False
+            content = getattr(logprobs_obj, "content", None)
+            if not content:
+                return None, False
+
+            token_logprobs = []
+            for token in content:
+                lp = getattr(token, "logprob", None)
+                if lp is None and isinstance(token, dict):
+                    lp = token.get("logprob")
+                if lp is not None:
+                    token_logprobs.append(float(lp))
+
+            if not token_logprobs:
+                return None, False
+
+            avg_logprob = float(np.mean(token_logprobs))
+            confidence = float(np.exp(avg_logprob))
+            # Clamp to [0, 1] for safety.
+            confidence = max(0.0, min(1.0, confidence))
+            return confidence, True
+        except Exception as e:
+            logger.warning("Failed to compute logprob confidence: %s", e)
+            return None, False
 
     # ---------------------------------------------------------------
     # Entry point 2: ask_profile — proactively gather user interests
@@ -376,6 +534,10 @@ class PaperQAAgent:
             planner_reasoning = f"\nPlanner note: {decision['reasoning']}"
 
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+        tone_block = _get_tone_instruction(state)
+        if tone_block:
+            messages.append({"role": "system", "content": tone_block})
 
         if is_first_turn:
             messages.append({
@@ -441,6 +603,47 @@ class PaperQAAgent:
             result["profile_asked"] = True
         return result
 
+    def evaluate_no_retrieval_answer(self, query: str, answer: str) -> str:
+        """Self-reflection evaluator when logprobs are unavailable.
+
+        Returns:
+          - 'LOW_CONFIDENCE'  → prefer to fall back to retrieval
+          - 'HIGH_CONFIDENCE' → answer is likely safe as-is
+        """
+        q = (query or "").strip()
+        a = (answer or "").strip()
+        if not q or not a:
+            return "LOW_CONFIDENCE"
+
+        prompt = (
+            "你是一个事实核查员。\n\n"
+            f"用户问题：{q}\n\n"
+            f"模型回答：{a}\n\n"
+            "任务：请评估这个回答中是否包含具体的实体名称、论文标题、精确数字、"
+            "或者非常冷门/需要外部资料支撑的知识。\n"
+            "如果你认为这个回答有相当一部分内容可能是编造的、缺乏依据，"
+            "或者很可能不准确，请只输出：LOW_CONFIDENCE。\n"
+            "如果你认为这是常识性、入门级或高度确定的内容，且几乎不依赖外部检索，"
+            "请只输出：HIGH_CONFIDENCE。\n"
+            "注意：只能输出这两个单词之一，不要输出任何解释。"
+        )
+
+        try:
+            resp = self.llm.chat(
+                [{"role": "system", "content": prompt}],
+                temperature=0.0,
+                max_tokens=4,
+            )
+            text = (resp or "").strip().upper()
+            if "LOW_CONFIDENCE" in text:
+                return "LOW_CONFIDENCE"
+            if "HIGH_CONFIDENCE" in text:
+                return "HIGH_CONFIDENCE"
+        except Exception as e:
+            logger.warning("Self-reflection evaluation failed: %s", e)
+        # On any failure, be slightly optimistic to avoid over-triggering retrieval.
+        return "HIGH_CONFIDENCE"
+
     # ---------------------------------------------------------------
     # Entry point 3: handle_feedback — process feedback on recs
     # ---------------------------------------------------------------
@@ -465,6 +668,9 @@ class PaperQAAgent:
 
         if is_vague:
             messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            tone_block = _get_tone_instruction(state)
+            if tone_block:
+                messages.append({"role": "system", "content": tone_block})
             messages.append({
                 "role": "system",
                 "content": (
@@ -653,6 +859,7 @@ def _empty_conversation_state() -> Dict[str, Any]:
         "user_satisfaction": "unknown",
         "open_questions": "",
         "summary": "",
+        "inferred_expertise": "unknown",
     }
 
 

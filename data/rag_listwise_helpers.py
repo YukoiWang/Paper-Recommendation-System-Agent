@@ -29,7 +29,7 @@ def _run(coro):
 # ---------------------------------------------------------------------------
 def get_seed_paper_ids_from_rag(limit: int = 300, chroma_path: Optional[str] = None) -> List[str]:
     """List paper IDs from RAG Chroma collection (for sampling seed papers)."""
-    path = chroma_path or os.getenv("CHROMA_PERSIST_DIR", "/tmp/chroma_db")
+    path = chroma_path or os.getenv("CHROMA_PERSIST_DIR") or os.path.expanduser("~/chroma_db")
     path = Path(path)
     if not path.is_absolute():
         path = _PROJECT_ROOT / path

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Dict, List, Literal, Optional, Tuple
 
 import sys
@@ -14,7 +15,16 @@ from agent.models import Paper, UserProfile
 from agent.rerank_prompt import build_rerank_messages, parse_rerank_response
 
 logger = logging.getLogger(__name__)
-DEFAULT_BGE_RERANKER_PATH = "./output/bge-finetuned"
+# Prefer migrated ~/bge-finetuned-v2, else local training output
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_DEFAULT_BGE_CANDIDATES = [
+    os.path.expanduser("~/bge-finetuned-v2"),
+    str(_PROJECT_ROOT / "output" / "bge-finetuned"),
+]
+DEFAULT_BGE_RERANKER_PATH = next(
+    (p for p in _DEFAULT_BGE_CANDIDATES if os.path.isdir(p)),
+    str(_PROJECT_ROOT / "output" / "bge-finetuned"),
+)
 FALLBACK_BGE_RERANKER = "BAAI/bge-reranker-v2-m3"
 RankMode = Literal["llm", "bge_reranker"]
 

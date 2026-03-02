@@ -1,6 +1,7 @@
 """Recall agent: multi-path (vector + rule + ItemCF) merge + online/offline fusion."""
 from __future__ import annotations
 import logging
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -14,6 +15,11 @@ from agent.cold_start import resolve_user_vector, get_trending_papers
 from agent.recall_strategies import vector_recall, rule_based_recall, itemcf_recall, merge_results
 
 logger = logging.getLogger(__name__)
+
+try:
+    from agent.filter_utils import get_global_bloom_filter
+except ImportError:
+    get_global_bloom_filter = None  # type: ignore
 
 
 def _merge_online_offline(
@@ -42,18 +48,19 @@ def _merge_online_offline(
     return fused
 
 
+def _parse_year(pub: str) -> int:
+    if not pub:
+        return 0
+    m = re.search(r"20\d{2}", str(pub))
+    return int(m.group()) if m else 0
+
+
 def _apply_recency_boost(papers: List[Paper], recency_weight: float = 0.3) -> List[Paper]:
     """Sort by score * (1 - recency_weight) + recency_score * recency_weight."""
-    import re
-    def parse_year(pub: str) -> int:
-        if not pub:
-            return 0
-        m = re.search(r"20\d{2}", str(pub))
-        return int(m.group()) if m else 0
-    max_year = max(parse_year(p.published) for p in papers) or 2024
+    max_year = max(_parse_year(p.published) for p in papers) or 2024
     scored = []
     for p in papers:
-        yr = parse_year(p.published)
+        yr = _parse_year(p.published)
         recency = max(0, (yr - 2020) / 4.0) if max_year > 2020 else 0
         norm_recency = recency / 4.0 if max_year > 2020 else 0
         combined = p.score * (1 - recency_weight) + norm_recency * recency_weight
@@ -62,10 +69,32 @@ def _apply_recency_boost(papers: List[Paper], recency_weight: float = 0.3) -> Li
     return [p for _, p in scored]
 
 
+def _apply_time_decay(
+    papers: List[Paper],
+    ref_year: int = 2024,
+    decay_factor: float = 0.1,
+) -> List[Paper]:
+    """Time decay: score *= 1/(1 + decay_factor * (ref_year - year)). Older papers down-weighted."""
+    out = []
+    for p in papers:
+        yr = _parse_year(p.published)
+        if yr <= 0:
+            out.append(p)
+            continue
+        decay = 1.0 / (1.0 + decay_factor * max(0, ref_year - yr))
+        new_score = p.score * decay
+        out.append(Paper(
+            paper_id=p.paper_id, title=p.title, abstract=p.abstract,
+            authors=p.authors, categories=p.categories, published=p.published,
+            embedding=p.embedding, score=new_score,
+        ))
+    out.sort(key=lambda x: x.score, reverse=True)
+    return out
+
+
 class RecallAgent:
     """
-    Multi-path recall: vector + rule + ItemCF, then merge.
-    Also fuses online search results with offline recall.
+    Discovery recall: vector + rule + ItemCF, optional graph expansion, time decay, Bloom filter (read/block).
     """
 
     def __init__(
@@ -77,6 +106,10 @@ class RecallAgent:
         author_boost: float = 0.25,
         category_boost: float = 0.10,
         trending_count: int = 10,
+        use_bloom_filter: bool = True,
+        use_time_decay: bool = True,
+        time_decay_ref_year: int = 2024,
+        time_decay_factor: float = 0.1,
     ):
         self.retrieval = retrieval_agent
         self.top_k_vector = top_k_vector
@@ -85,6 +118,22 @@ class RecallAgent:
         self.author_boost = author_boost
         self.category_boost = category_boost
         self.trending_count = trending_count
+        self._use_time_decay = use_time_decay
+        self._time_decay_ref_year = time_decay_ref_year
+        self._time_decay_factor = time_decay_factor
+        self._bloom = None
+        if use_bloom_filter and get_global_bloom_filter is not None:
+            try:
+                self._bloom = get_global_bloom_filter()
+            except Exception as e:
+                logger.warning("Bloom filter not available: %s", e)
+
+    def _graph_expand(self, seed_ids: List[str], paper_cache: Dict[str, Paper]) -> Dict[str, float]:
+        """
+        Local graph expansion: from seed paper IDs return extra (paper_id -> bonus score).
+        Override or inject a graph store for production (e.g. citation graph).
+        """
+        return {}
 
     def offline_recall(
         self,
@@ -93,7 +142,7 @@ class RecallAgent:
         top_k_override: Optional[int] = None,
         prefer_recent: bool = False,
     ) -> RecommendationResult:
-        """Offline multi-path recall: vector + rule + ItemCF."""
+        """Offline multi-path recall: vector + rule + ItemCF, optional graph expansion, time decay, Bloom filter."""
         all_papers = list(new_papers) if new_papers else list(self.retrieval._cache.values())
         if new_papers:
             self.retrieval.index_papers(new_papers)
@@ -134,9 +183,33 @@ class RecallAgent:
                     published=paper.published, embedding=paper.embedding, score=score,
                 )
                 recommended.append(rec)
+
+        # Optional: local graph expansion (stub adds nothing unless overridden)
+        seed_ids = [p.paper_id for p in recommended]
+        extra_scores = self._graph_expand(seed_ids, self.retrieval._cache)
+        if extra_scores:
+            for p in recommended:
+                p.score = p.score + extra_scores.get(p.paper_id, 0.0)
+            recommended.sort(key=lambda x: x.score, reverse=True)
+
+        # Time decay (discovery path: down-weight old papers)
+        if self._use_time_decay and recommended:
+            recommended = _apply_time_decay(
+                recommended,
+                ref_year=self._time_decay_ref_year,
+                decay_factor=self._time_decay_factor,
+            )
+
         if prefer_recent and recommended:
             recommended = _apply_recency_boost(recommended)
-            recommended = recommended[:top_k]
+        recommended = recommended[:top_k]
+
+        # Bloom filter: strict filter of read/blocked (discovery path)
+        if self._bloom is not None:
+            before = len(recommended)
+            recommended = self._bloom.filter_candidates(user.user_id, recommended)
+            stats["bloom_filtered"] = before - len(recommended)
+
         result = RecommendationResult(user_id=user.user_id, recommended_papers=recommended, recall_stats=stats)
         logger.info("Stats: %s | final %s papers", stats, len(recommended))
         return result
