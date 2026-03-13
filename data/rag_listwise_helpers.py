@@ -50,21 +50,59 @@ def get_seed_paper_ids_from_rag(limit: int = 300, chroma_path: Optional[str] = N
 # ---------------------------------------------------------------------------
 # Backend services (async) - VectorDB, MetadataDB, Embedding
 # ---------------------------------------------------------------------------
-def _get_services():
-    """Lazy load backend services."""
+_CACHED_VEC_DB = None
+_CACHED_META_DB = None
+_CACHED_EMB_SVC = None
+
+
+def _get_vec_db():
+    """Get cached VectorDBService (Chroma/Milvus)."""
+    global _CACHED_VEC_DB
+    if _CACHED_VEC_DB is not None:
+        return _CACHED_VEC_DB
     try:
         from backend.services.vector_db import VectorDBService
-        from backend.services.metadata_db import MetadataDBService
-        from backend.services.embedding import EmbeddingService
-        return VectorDBService(), MetadataDBService(), EmbeddingService()
+
+        _CACHED_VEC_DB = VectorDBService()
+        return _CACHED_VEC_DB
     except Exception as e:
-        print(f"Backend services load error: {e}")
-        return None, None, None
+        print(f"VectorDBService init error: {e}")
+        return None
+
+
+def _get_meta_db():
+    """Get cached MetadataDBService (PostgreSQL). If unavailable, returns None."""
+    global _CACHED_META_DB
+    if _CACHED_META_DB is not None:
+        return _CACHED_META_DB
+    try:
+        from backend.services.metadata_db import MetadataDBService
+
+        _CACHED_META_DB = MetadataDBService()
+        return _CACHED_META_DB
+    except Exception:
+        # Metadata DB is optional for offline eval; avoid noisy logs.
+        return None
+
+
+def _get_emb_svc():
+    """Get cached EmbeddingService. Only needed when adding new papers to RAG."""
+    global _CACHED_EMB_SVC
+    if _CACHED_EMB_SVC is not None:
+        return _CACHED_EMB_SVC
+    try:
+        from backend.services.embedding import EmbeddingService
+
+        _CACHED_EMB_SVC = EmbeddingService()
+        return _CACHED_EMB_SVC
+    except Exception as e:
+        print(f"EmbeddingService init error: {e}")
+        return None
 
 
 def get_paper_from_rag(paper_id: str) -> Optional[Dict[str, Any]]:
     """Get paper by id from metadata DB (title, abstract, etc.). Returns None if not in RAG."""
-    _, meta_db, _ = _get_services()
+    meta_db = _get_meta_db()
     if meta_db is None:
         return None
     return _run(meta_db.get_paper_by_id(paper_id))
@@ -72,7 +110,7 @@ def get_paper_from_rag(paper_id: str) -> Optional[Dict[str, Any]]:
 
 def get_papers_from_rag(paper_ids: List[str]) -> List[Dict[str, Any]]:
     """Batch get papers from metadata DB."""
-    _, meta_db, _ = _get_services()
+    meta_db = _get_meta_db()
     if meta_db is None or not paper_ids:
         return []
     return _run(meta_db.get_papers_by_ids(paper_ids))
@@ -80,7 +118,7 @@ def get_papers_from_rag(paper_ids: List[str]) -> List[Dict[str, Any]]:
 
 def get_embedding_for_paper(paper_id: str) -> Optional[List[float]]:
     """Get embedding vector for paper_id from vector DB."""
-    vec_db, _, _ = _get_services()
+    vec_db = _get_vec_db()
     if vec_db is None:
         return None
     return _run(vec_db.get_embedding(paper_id))
@@ -92,7 +130,7 @@ def similarity_search_rag(
     exclude_ids: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Search RAG vector DB by query embedding. Returns list of {paper_id, score, metadata}."""
-    vec_db, _, _ = _get_services()
+    vec_db = _get_vec_db()
     if vec_db is None:
         return []
     return _run(vec_db.similarity_search(query_embedding, top_k=top_k, exclude_ids=exclude_ids or []))
@@ -100,7 +138,9 @@ def similarity_search_rag(
 
 def add_paper_to_rag(paper: Dict[str, Any]) -> bool:
     """Insert paper into metadata DB and vector DB (compute embedding and add)."""
-    vec_db, meta_db, emb_svc = _get_services()
+    vec_db = _get_vec_db()
+    meta_db = _get_meta_db()
+    emb_svc = _get_emb_svc()
     if meta_db is None or vec_db is None or emb_svc is None:
         return False
     paper_id = paper.get("paper_id") or paper.get("id", "")

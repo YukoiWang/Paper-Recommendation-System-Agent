@@ -343,6 +343,7 @@ class PaperQAAgent:
         history = state.get("history", [])
         papers = state.get("final_papers") or state.get("ranked_papers") or []
         cited = dict(state.get("cited_papers", {}))
+        evaluation_mode = bool(state.get("evaluation_mode", False))
 
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
@@ -351,7 +352,7 @@ class PaperQAAgent:
             messages.append({"role": "system", "content": tone_block})
 
         is_first_turn = not history and not state.get("profile_asked", False)
-        if is_first_turn:
+        if is_first_turn and not evaluation_mode:
             messages.append({
                 "role": "system",
                 "content": FIRST_TURN_PROFILE_PROMPT,
@@ -396,7 +397,14 @@ class PaperQAAgent:
         no_retrieval_mode = (route == "NO_RETRIEVAL" and not papers)
 
         if papers:
-            context = self._build_paper_context(papers)
+            max_papers = state.get("max_context_papers")
+            max_abstract_chars = state.get("max_context_abstract_chars")
+            if max_papers is not None:
+                papers = papers[:max_papers]
+            context = self._build_paper_context(
+                papers,
+                max_abstract_chars=max_abstract_chars,
+            )
             for i, p in enumerate(papers):
                 cited[f"[{i+1}]"] = p
             messages.append({
@@ -478,7 +486,7 @@ class PaperQAAgent:
             result["no_retrieval_logprobs_available"] = logprobs_available
             result["no_retrieval_verbal_flag"] = verbal_flag
 
-        if is_first_turn:
+        if is_first_turn and not evaluation_mode:
             result["profile_asked"] = True
         return result
 
@@ -805,13 +813,18 @@ class PaperQAAgent:
             return response
         return response + "\n".join(lines)
 
-    def _build_paper_context(self, papers: List[Paper]) -> str:
+    def _build_paper_context(
+        self,
+        papers: List[Paper],
+        max_abstract_chars: Optional[int] = None,
+    ) -> str:
         if not papers:
             return "(No papers retrieved)"
+        limit = max_abstract_chars if max_abstract_chars is not None else self.max_abstract_chars
         parts = []
         for i, p in enumerate(papers):
-            abstract = p.abstract[:self.max_abstract_chars]
-            if len(p.abstract) > self.max_abstract_chars:
+            abstract = p.abstract[:limit]
+            if len(p.abstract) > limit:
                 abstract += "..."
             authors = ", ".join(p.authors[:4])
             if len(p.authors) > 4:

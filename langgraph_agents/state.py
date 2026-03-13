@@ -45,6 +45,9 @@ class WorkflowState(TypedDict, total=False):
     ranked_papers: List[Paper]
     final_papers: List[Paper]
     top_k: int
+    # Eval alignment: when set, QA uses only this many papers and abstract chars (same as Ragas context).
+    max_context_papers: Optional[int]
+    max_context_abstract_chars: Optional[int]
 
     # --- Plan (set by Planner) ---
     plan: Optional[Dict[str, Any]]
