@@ -25,7 +25,7 @@ MANIFEST
 venv/
 env/
 ENV/
-.venv  # uv 默认虚拟环境目录（但通常应该提交 .venv，因为 uv 支持可提交的虚拟环境）
+.venv
 
 # IDE
 .vscode/
@@ -49,6 +49,9 @@ data/reranker/
 *.pkl
 *.pickle
 *.rar
+
+# Large paper data (avoid pushing to GitHub)
+data/papers_62k_for_bm25.json
 
 # Large output / trained models
 output/
