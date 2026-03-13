@@ -1,0 +1,704 @@
+{
+    "test_cases": [
+        {
+            "id": 1,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Hello there!",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 2,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Who are you?",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 3,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "What can you do for me?",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 4,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Thank you so much.",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 5,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Good morning.",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 6,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Tell me a joke.",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 7,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Are you a human?",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 8,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Goodbye!",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 9,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "How does this system work?",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 10,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "I am bored.",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 11,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Can you recommend papers?",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 12,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "What is the weather today?",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 13,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Nice to meet you.",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 14,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Are you powered by GPT-4?",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 15,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Help me.",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 16,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "What time is it?",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 17,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Testing 1 2 3.",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 18,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "You are very smart.",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 19,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "That's all for now.",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 20,
+            "scenario_category": "Chit-chat / Metaproblems",
+            "user_query": "Who created you?",
+            "conversation_history": null,
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 21,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find me some papers about Retrieval-Augmented Generation (RAG).",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 22,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Compare the differences between ViT and CNN architectures.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 23,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Show me recent research on Diffusion Models in 2024.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 24,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "I need papers discussing hallucination issues in Large Language Models.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 25,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Search for state-of-the-art papers on Graph Neural Networks for drug discovery.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 26,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "List papers related to Reinforcement Learning from Human Feedback (RLHF).",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 27,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Retrieve articles on Multi-modal Contrastive Learning.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 28,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find studies on LoRA and parameter-efficient fine-tuning.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 29,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "What are the latest papers on autonomous driving perception algorithms?",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 30,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Search for survey papers regarding Knowledge Graphs.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 31,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Show me papers about Chain-of-Thought prompting techniques.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 32,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "I want to see research on Transformer-XL and long-context modeling.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 33,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find papers focusing on AI ethics and bias detection.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 34,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Recommend papers on Sparse Attention mechanisms.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 35,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Search for articles about federated learning in medical imaging.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 36,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Retrieve papers comparing BERT and RoBERTa performance.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 37,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "I need papers on self-supervised learning for video understanding.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 38,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find the original paper for the Adam optimizer.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 39,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Search for papers on zero-shot object detection.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 40,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "List papers on Neural Architecture Search (NAS).",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 41,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Give me papers on cross-lingual transfer learning.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 42,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find studies on Quantization-Aware Training (QAT).",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 43,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Retrieve papers about Time-Series forecasting using LSTMs.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 44,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Search for research on explainable AI in financial credit scoring.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 45,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Show me papers about Swin Transformer applications.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 46,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find papers on text-to-SQL generation models.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 47,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "I need research on Point Cloud processing with Deep Learning.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 48,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Recommend papers on the CLIP model and its variants.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 49,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Search for papers on DistilBERT and model compression.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 50,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "List papers on Audio Signal Processing using WaveNet.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 51,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find papers on active learning for image classification.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 52,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Retrieve studies on GANs for medical data augmentation.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 53,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Search for papers on Mamba and State Space Models.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 54,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Give me papers on recommendation systems using Deep Collaborative Filtering.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 55,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find articles on few-shot learning for NLP.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 56,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Show me papers about YOLOV8 and object detection.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 57,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Search for research on the FlashAttention algorithm.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 58,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Retrieve papers on style transfer in computer vision.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 59,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "I want papers on prompt tuning vs prefix tuning.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 60,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find the paper describing the ResNet-50 architecture.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 61,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "List papers on privacy-preserving machine learning.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 62,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Search for papers on the GSP-weighted loss function.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 63,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Give me papers on Large Language Model evaluation benchmarks.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 64,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find papers about the impact of batch size on model convergence.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 65,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Retrieve papers on Mixture of Experts (MoE) models.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 66,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Search for articles on Sentiment Analysis for financial news.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 67,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Show me papers about Graph Convolutional Networks (GCN).",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 68,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Recommend papers on domain adaptation for speech recognition.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 69,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Find research on semi-supervised segmentation of 3D MRI scans.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 70,
+            "scenario_category": "Explicit Retrieval",
+            "user_query": "Retrieve papers on attention mechanisms in time series.",
+            "conversation_history": null,
+            "expected_route": "RETRIEVE_LOCAL"
+        },
+        {
+            "id": 71,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "Recommend some papers.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 72,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "I want to read about AI.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 73,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "Show me the most famous research.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 74,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "Find me some good articles for my thesis.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 75,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "Are there any new papers today?",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 76,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "Recommend something interesting.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 77,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "I need help with literature search.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 78,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "Search for deep learning papers.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 79,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "Show me CV papers.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 80,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "What are people reading lately?",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 81,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "I am looking for papers on networks.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 82,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "Find recent articles.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 83,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "Give me some citations.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 84,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "I need papers about optimization.",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 85,
+            "scenario_category": "Vague / Clarification",
+            "user_query": "Do you have papers on security?",
+            "conversation_history": null,
+            "expected_route": "NEED_CLARIFY"
+        },
+        {
+            "id": 86,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Can you explain the methodology of the first paper in detail?",
+            "conversation_history": "The agent has just provided a list of three papers about RAG.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 87,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "What are the limitations mentioned in that study?",
+            "conversation_history": "The agent just provided a summary of the 'Attention is All You Need' paper.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 88,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Show me the comparison table from this article.",
+            "conversation_history": "User and agent are discussing the ResNet paper.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 89,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Which one of these is the most recent?",
+            "conversation_history": "Agent listed five papers on BERT variants.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 90,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Could you summarize the results section?",
+            "conversation_history": "Discussion regarding a specific paper on ViT.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 91,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Who are the authors of the second one?",
+            "conversation_history": "Agent provided a search result list.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 92,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "What datasets did they use for training?",
+            "conversation_history": "The agent is explaining the Llama 3 technical report.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 93,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Tell me more about the 'encoder-only' part.",
+            "conversation_history": "Agent described the architecture of BERT.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 94,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Compare the performance between the two papers you just mentioned.",
+            "conversation_history": "Agent just listed two papers about GANs.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 95,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Is there a GitHub link for this research?",
+            "conversation_history": "Discussion on a specific paper titled 'Swin Transformer'.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 96,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "What does the third figure in the paper represent?",
+            "conversation_history": "User and agent are analyzing a specific PDF content.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 97,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Summarize the conclusion for me.",
+            "conversation_history": "Agent just presented a long abstract.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 98,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Why did they choose this specific evaluation metric?",
+            "conversation_history": "Agent explained the experimental setup of a paper.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 99,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Are there any follow-up papers by the same authors?",
+            "conversation_history": "Agent just provided a single paper by Vaswani et al.",
+            "expected_route": "NO_RETRIEVAL"
+        },
+        {
+            "id": 100,
+            "scenario_category": "Contextual Follow-up",
+            "user_query": "Translate the abstract into simple terms.",
+            "conversation_history": "Agent displayed the technical abstract of a paper.",
+            "expected_route": "NO_RETRIEVAL"
+        }
+    ]
+}

@@ -1,0 +1,152 @@
+﻿query,category,is_pass,output
+asdfghjkl,correction,True,INVALID
+!@#$%^,correction,True,INVALID
+qwerty123,correction,True,INVALID
+   ,correction,True,INVALID
+".,;:",correction,True,INVALID
+测试乱码~!@,correction,True,INVALID
+123456,correction,True,INVALID
+abcdefg,correction,True,INVALID
+?!?!?!,correction,True,INVALID
+     ,correction,True,INVALID
+AI papers in 2026,correction,False,AI papers in 2026
+Transformer in 2035,correction,True,latest Transformer research
+LLM trends 2027,correction,True,LLM trends recent
+2028 breakthroughs in NLP,correction,True,recent breakthroughs in NLP
+future of AI 2029,correction,True,future of AI in the recent years
+CVPR 2030 accepted papers,correction,True,CVPR latest accepted papers
+new models 2031,correction,True,new models latest
+research trends 2032,correction,True,research trends latest
+2024 papers (future),correction,False,2024 papers (future)
+AI summit 2033,correction,True,AI summit recent
+BERT model explain,correction,True,BERT model explain
+GP3 architecture,correction,True,GPT-3 architecture
+Tranformer layer,correction,True,Transformer layer
+LSTM vs GRU diffs,correction,True,LSTM vs GRU differences
+Attenion is all you need,correction,True,Attention Is All You Need
+Reinforcment learning,correction,True,Reinforcement learning
+Neural netwrok,correction,True,Neural network
+Convolutionl neural network,correction,True,Convolutional neural network
+Recurrent neual network,correction,True,Recurrent neural network
+Generative adversial network,correction,True,Generative adversarial network
+它的主要贡献是什么？,fusion,False,在前面提到的 Transformer 模型中，请具体说明这篇提出 Transformer 的原始论文（Attention Is All You Need）的主要贡献有哪些？
+和CNN相比呢？,fusion,False,和传统CNN模型相比，Vision Transformer（ViT）在图像分类等视觉任务上的性能、训练数据需求、计算开销和适用场景方面各有什么优缺点？
+它的训练方法有哪些？,fusion,False,在BERT预训练中，常见的训练方法和任务有哪些？例如除了经典的Masked Language Modeling（MLM）和Next Sentence Prediction（NSP）之外，还有哪些改进或变体的预训练目标和训练策略？
+那它的缺点呢？,fusion,False,相比你刚才说的GPT-3的优点，那它在实际应用和技术层面都有哪些主要缺点或局限？
+具体怎么实现？,fusion,False,在LoRA微调原理的基础上，具体在实现层面是怎么做的？比如在Transformer中是如何对权重矩阵进行低秩分解、插入A/B矩阵、冻结原始权重并只训练LoRA参数的？能否结合一个实际实现流程（如PyTorch代码或常见开源库的做法）详细说明具体实现步骤？
+这个方法的收敛速度如何？,fusion,False,在使用 AdamW 优化器时，这个方法的收敛速度如何？相比于传统 Adam 或 SGD（带/不带动量），在训练深度神经网络时的收敛速度和迭代效率有何差异？是否有理论或实验结果支持其在收敛速度上的优势或劣势？
+它适合小样本吗？,fusion,False,Prefix-tuning 这种方法在小样本（few-shot）或低资源场景下是否适用？它在小样本学习中的效果和优缺点是什么？
+它的参数量是多少？,fusion,False,在之前提到的 T5 模型中，不同规模版本（如 T5-Small、Base、Large、3B、11B）的参数量分别是多少？
+能用于文本生成吗？,fusion,False,BART模型能用于文本生成吗？如果可以，请说明它在文本生成任务中的典型应用场景（如摘要生成、对话生成、机器翻译或续写等）以及与其他生成模型（如GPT类模型）的主要区别。
+它的代码开源吗？,fusion,False,CLIP模型的代码是开源的吗？如果是，能说明一下它的开源地址（例如GitHub仓库）以及主要开源内容吗？
+它和BERT比哪个好？,fusion,False,在中文自然语言处理任务中，RoBERTa模型和BERT模型相比，整体效果和性能哪个更好？请从预训练策略、模型结构差异、下游任务表现（如分类、问答等）以及实际应用中的优缺点等方面进行对比说明。
+它的损失函数是什么？,fusion,False,在SimCLR自监督学习方法中，它具体使用的损失函数是什么？请给出损失函数的数学形式（包括对比损失/InfoNCE的公式）、各个符号的含义，以及它是如何在正负样本对之间起作用的。
+它支持中文吗？,fusion,False,XLM-R模型支持中文吗？它在中文文本上的表现和适用场景如何？
+这个算法的复杂度？,fusion,False,FlashAttention 这个算法的时间和空间复杂度分别是多少？请从与标准 Transformer 注意力机制 O(n^2) 复杂度的对比角度进行说明，并简要解释其在实际 GPU 实现中的有效复杂度表现。
+它的应用场景有哪些？,fusion,False,在深度生成模型中，关于扩散模型（diffusion models），它的主要应用场景有哪些？请从图像生成、编辑与修复、语音/音频、文本、科学计算或其他典型方向分别概括说明。
+那它的变体呢？,fusion,False,在前面提到的 GAN 的基础上，它有哪些主要的变体和改进版本？比如在结构、训练方式或应用方向上比较有代表性的 GAN 变体有哪些？
+如何训练它？,fusion,False,关于变分自编码器（VAE），如何从零开始训练一个VAE模型？包括：网络结构如何设计、损失函数（重构误差和KL散度）如何实现、训练步骤和超参数（学习率、batch size、latent 维度等）如何选择，以及在实际训练中如何判断模型是否训练良好？
+这个框架的优缺点？,fusion,False,在深度学习中使用 PyTorch 框架有哪些主要优点和缺点？请从易用性（动态图/静态图）、生态与社区、性能与部署（如与 TensorFlow 对比）、调试与开发体验、分布式训练和生产环境支持等方面系统地分析。
+它的最新进展？,fusion,False,Swin Transformer 模型目前有哪些最新研究进展和改进方向？包括近期的重要变体、在视觉任务（如检测、分割、视频理解等）中的最新应用，以及在效率或性能上的代表性工作。
+有没有改进版本？,fusion,False,在 ResNet 的基础上，目前有哪些典型的改进版本或变体（例如在结构、残差连接方式、注意力机制或轻量化方面的改进），以及它们各自的主要改进点和适用场景？
+Neural Machine Translation,expansion,True,"Neural Machine Translation (NMT, sequence-to-sequence translation, encoder-decoder translation, neural sequence modeling for translation, end-to-end machine translation)"
+Large Language Model,expansion,True,"Large Language Model (LLM, foundation model, generative language model, instruction-tuned language model, transformer-based language model)"
+Vision Transformer,expansion,True,"Vision Transformer (ViT, visual transformer, transformer-based image recognition, transformer-based vision model, image transformer networks)"
+Generative Pre-trained Transformer,expansion,True,"Generative Pre-trained Transformer (GPT, large language model, LLM, autoregressive transformer, decoder-only transformer)"
+Bidirectional Encoder Representations from Transformers,expansion,True,"Bidirectional Encoder Representations from Transformers (BERT, bidirectional transformer encoder, masked language model, contextualized word representations, transformer-based language model)"
+Variational Autoencoder,expansion,True,"Variational Autoencoder (VAE, variational auto-encoding model, latent variable generative model, probabilistic autoencoder, amortized variational inference)"
+Generative Adversarial Network,expansion,True,"Generative Adversarial Network (GAN, generative adversarial models, adversarial generative modeling, conditional GAN, Wasserstein GAN)"
+Mean Squared Error,expansion,True,"Mean Squared Error (MSE, L2 loss, quadratic loss, squared loss, least squares error)"
+Stochastic Gradient Descent,expansion,True,"Stochastic Gradient Descent (SGD, mini-batch stochastic gradient descent, online gradient descent, incremental gradient descent, first-order optimization)"
+Area Under the Curve,expansion,True,"Area Under the Curve (AUC, ROC AUC, area under the ROC curve, AUROC, c-statistic)"
+Convolutional Neural Network,expansion,True,"Convolutional Neural Network (CNN, convolutional networks, deep convolutional neural networks, convnets, convolutional deep learning models)"
+Recurrent Neural Network,expansion,True,"Recurrent Neural Network (RNN, recurrent neural networks, sequence modeling, Elman network, Jordan network)"
+Long Short-Term Memory,expansion,True,"Long Short-Term Memory (LSTM, recurrent neural network, gated RNN, sequence modeling, gated recurrent unit)"
+Gated Recurrent Unit,expansion,True,"Gated Recurrent Unit (GRU, gated recurrent neural network, gated RNN, recurrent gating mechanism, simplified LSTM)"
+Natural Language Processing,expansion,True,"Natural Language Processing (NLP, computational linguistics, language understanding, text mining, language modeling)"
+Computer Vision,expansion,True,"Computer Vision (CV, visual recognition, image understanding, visual perception, pattern recognition)"
+Reinforcement Learning,expansion,True,"Reinforcement Learning (RL, deep reinforcement learning, policy gradient methods, value-based methods, actor-critic methods)"
+few-shot learning,expansion,False,"few-shot learning (few-shot classification, meta-learning, low-shot learning, N-shot learning, in-context learning)"
+zero-shot learning,expansion,False,"zero-shot learning (zero-shot classification, zero-shot generalization, zero-shot transfer, zero-shot recognition, zero-shot inference)"
+multimodal learning,expansion,False,"multimodal learning (multimodal representation learning, multimodal fusion, vision-language learning, cross-modal learning, multimodal deep learning)"
+Microsoft,expansion,True,"Microsoft (Microsoft Research, MSR, Azure AI, Bing AI, Copilot, OpenAI partnership)"
+RAG是什么,parent,False,"检索增强生成（Retrieval-Augmented Generation, RAG）在大语言模型中的基本原理、体系结构（检索模块与生成模块的协同）、典型实现方式以及其在提高问答准确性和减少幻觉方面的应用与效果研究综述"
+怎么微调LLM,parent,False,大型语言模型（LLM）的高效微调方法与实践，包括全参数微调、LoRA/QLoRA 等参数高效微调（PEFT）技术、指令微调（instruction tuning）、对齐（alignment）与RLHF流程，以及在有限算力和小数据集场景下的工程实现与最佳实践综述。
+transformer结构,parent,False,深度学习中Transformer结构的原理与架构，包括自注意力机制（self-attention）、多头注意力（multi-head attention）、位置编码（positional encoding）、编码器-解码器结构以及其在自然语言处理任务中的应用与改进模型综述
+BERT和GPT区别,parent,False,比较BERT与GPT两类预训练语言模型的架构差异（如编码器 vs 解码器、双向 vs 单向注意力）、预训练目标（Masked Language Modeling vs Autoregressive Language Modeling）、下游任务适用场景（理解类任务 vs 生成类任务）以及在NLP基准数据集上的性能与应用差异的研究综述
+注意力机制,parent,False,深度学习中的注意力机制（包括自注意力、软/硬注意力、多头注意力等）的原理、数学形式化、典型模型结构（如Transformer）、在自然语言处理和计算机视觉中的应用及其与传统序列建模方法（如RNN、LSTM）的比较研究
+对比学习,parent,False,对比学习（contrastive learning）在自监督表示学习中的方法与应用综述，包括InfoNCE等典型损失函数、SimCLR、MoCo、BYOL、SimSiam等代表性模型及其在计算机视觉和自然语言处理任务中的性能与优缺点比较。
+扩散模型,parent,False,扩散模型（diffusion models）在生成式模型中的原理、训练方法及其在图像生成任务中的最新进展与应用综述，包括DDPM、DDIM、Score-based models等代表性方法的比较研究
+提示工程,parent,False,大型语言模型中的提示工程（prompt engineering）方法与原理，包括提示设计模式、少样本与零样本提示、思维链（Chain-of-Thought）提示、系统提示与角色设定、以及其对模型性能和可控性的影响与评估方法的系统研究综述
+模型蒸馏,parent,False,深度学习中模型蒸馏（knowledge distillation）的方法与理论，包括教师-学生网络框架、软标签与温度参数的作用、蒸馏损失设计（如KL散度、特征蒸馏）、以及其在模型压缩与小模型性能提升中的应用与最新研究进展综述。
+量化,parent,False,量化投资与量化交易的核心方法与模型，包括因子模型、统计套利、高频交易、机器学习在量化策略中的应用，以及在中国A股和全球市场中的实证研究综述
+稀疏注意力,parent,False,稀疏注意力机制在深度学习中的方法与应用综述，包括Transformer中稀疏自注意力的设计（如局部注意力、块稀疏、Top-k注意力、基于哈希或路由的稀疏注意力）及其在长序列建模中的计算复杂度降低与性能权衡研究
+位置编码,parent,False,Transformer 模型中的位置编码（positional encoding）方法及其改进，包括绝对位置编码、相对位置编码、旋转位置编码（RoPE）等在自然语言处理和视觉任务中的原理、实现方式及对模型性能影响的系统研究综述
+分词器,parent,False,中文自然语言处理中的分词器技术与方法，包括基于规则、统计学习和深度学习（如BiLSTM-CRF、Transformer、BERT等）实现的中文分词算法、评测指标以及在信息检索和文本挖掘中的应用研究综述
+参数高效微调,parent,False,"参数高效微调（parameter-efficient fine-tuning, PEFT）方法在大规模预训练语言模型上的技术综述与比较研究，包括LoRA、Prefix Tuning、Adapter Tuning、P-Tuning等代表性方法的原理、参数效率、性能表现以及在低资源和多任务场景中的应用与优缺点分析。"
+幻觉问题,parent,False,大规模语言模型（LLM）中的“幻觉”问题：其成因机制（如训练数据偏差、概率生成特性、对事实性约束不足）、典型表现形式、定量评估方法以及减少或缓解幻觉的技术手段（如检索增强生成、事实校验、对齐训练、提示工程等）研究综述
+比较CNN和ViT的优缺点,decomposition,True,卷积神经网络（CNN）在图像处理和视觉任务中的主要优点和缺点分别是什么？|视觉Transformer（ViT）在图像处理和视觉任务中的主要优点和缺点分别是什么？|在相同或相似视觉任务场景下，CNN与ViT在性能、计算开销、数据需求和可解释性等方面有哪些对比结论？
+RAG的检索器和生成器如何协同,decomposition,True,在RAG（Retrieval-Augmented Generation）框架中，检索器的核心职责、常用实现方式（如BM25、向量检索、混合检索）以及其输出形式分别是什么？|在RAG框架中，生成器（如大语言模型）的输入结构、对检索结果的利用方式以及生成过程中的条件控制机制是怎样的？|有哪些典型的RAG系统架构或工作流程详细描述了检索器与生成器之间的数据流、接口设计和协同策略（如top-k选择、重排序、迭代检索-生成）？|在实际应用中，为提升RAG系统整体效果，检索器与生成器协同优化的常见方法有哪些（如联合调参、反馈学习、端到端训练或对比学习）？
+训练GPT-3需要多少数据和多长时间,decomposition,False,EMPTY_RESULT
+BERT的预训练任务是什么？如何微调？,decomposition,True,BERT 模型在预训练阶段使用了哪些具体的预训练任务（如 MLM、NSP 等），这些任务的设计目的和机制是什么？|在下游任务中如何对 BERT 进行微调？包括输入格式、模型结构调整（如添加分类层）、训练超参数和典型微调流程。
+LoRA和Prefix-tuning在效果和效率上有什么区别,decomposition,True,分别综述LoRA（Low-Rank Adaptation）在大语言模型或预训练模型上的微调效果（如下游任务性能、泛化能力等），并总结其典型实验结果|分别综述Prefix-tuning在大语言模型或预训练模型上的微调效果（如下游任务性能、泛化能力等），并总结其典型实验结果|比较LoRA与Prefix-tuning在计算效率和资源开销方面的差异，包括训练/推理时间、显存占用、可训练参数量以及部署成本等|综合已有对比实验或综述性工作，分析LoRA与Prefix-tuning在效果与效率上的整体权衡与适用场景差异
+Transformer的编码器和解码器各有什么作用,decomposition,False,EMPTY_RESULT
+如何评估生成模型的性能？常用的指标有哪些？,decomposition,True,有哪些用于评估生成模型（如文本生成、图像生成等）性能的一般方法和思路？|评估生成模型性能时，常用的定量指标有哪些？请分别说明其含义和适用场景。|在自然语言生成任务中，常用的评价指标（如BLEU、ROUGE、METEOR、BERTScore等）有哪些及其优缺点？|在图像生成任务中，常用的评价指标（如FID、IS、Precision & Recall for GANs等）有哪些及其优缺点？
+解释梯度消失和梯度爆炸，以及解决方案,decomposition,True,什么是神经网络中的梯度消失现象？它产生的原因和典型表现是什么？|什么是神经网络中的梯度爆炸现象？它产生的原因和典型表现是什么？|针对梯度消失问题，目前常用的解决方法有哪些？请分别说明其基本原理和适用场景。|针对梯度爆炸问题，目前常用的解决方法有哪些？请分别说明其基本原理和适用场景。
+SWIN Transformer的窗口划分和移位策略,decomposition,False,EMPTY_RESULT
+对比有监督学习和自监督学习,decomposition,True,有监督学习的基本概念、典型方法及其优缺点是什么？|自监督学习的基本概念、典型方法及其优缺点是什么？|从数据需求、标注成本、模型性能、适用场景等方面，对比分析有监督学习和自监督学习的异同有哪些？
+什么是知识蒸馏？如何用于模型压缩？,decomposition,True,什么是知识蒸馏？请从概念、基本原理以及典型的教师-学生网络框架进行系统阐述，并给出代表性论文。|知识蒸馏是如何用于模型压缩的？请说明其在减小模型参数量、计算量方面的具体方法、常见技术路线和应用案例。
+RLHF的步骤：奖励建模和PPO优化,decomposition,True,在RLHF（Reinforcement Learning from Human Feedback）中，奖励建模（reward modeling）的具体步骤和方法是什么？包括数据收集、人工标注、模型训练和评估等环节。|在RLHF中，基于奖励模型使用PPO（Proximal Policy Optimization）对大语言模型进行优化的具体流程和关键技术细节是什么？包括目标函数、训练步骤和稳定性技巧等。
+Batch Norm和Layer Norm的区别与联系,decomposition,True,什么是Batch Normalization（Batch Norm），它的原理、计算方式以及典型应用场景是什么？|什么是Layer Normalization（Layer Norm），它的原理、计算方式以及典型应用场景是什么？|Batch Norm和Layer Norm在归一化维度、对batch size的依赖性、在CNN/RNN/Transformer等模型中的表现和适用性方面有哪些主要区别？|Batch Norm和Layer Norm在稳定训练、加速收敛、减少对初始化和学习率敏感性等方面有哪些共同点和内在联系？
+NeRF的体渲染和位置编码,decomposition,False,EMPTY_RESULT
+CLIP的对比损失和双编码器结构,decomposition,True,CLIP模型中使用的对比损失（contrastive loss）的具体形式是什么，它是如何在图文匹配任务中工作的？|CLIP模型的双编码器（dual-encoder）结构是怎样的，图像编码器和文本编码器分别如何设计和协同？|CLIP的对比损失与双编码器结构之间是如何配合的，这种组合相比单编码器或其他结构有什么优势？
+什么是反向传播,decision,True,"R:False, O:False"
+SVM的核函数有哪些,decision,True,"R:False, O:False"
+交叉熵损失函数公式,decision,True,"R:False, O:False"
+Hinton是谁,decision,True,"R:False, O:False"
+深度学习三巨头,decision,False,"R:True, O:False"
+attention is all you need 论文作者,decision,True,"R:False, O:False"
+pytorch和tensorflow哪个好,decision,False,"R:False, O:False"
+如何安装CUDA,decision,False,"R:False, O:False"
+huggingface transformers库的常用函数,decision,False,"R:False, O:False"
+BERT的代码实现,decision,False,"R:False, O:False"
+2024年ACL最佳论文,decision,False,"R:True, O:False"
+最新发布的GPT-4细节,decision,True,"R:True, O:True"
+2025年AI顶会日程,decision,False,"R:False, O:False"
+最近有什么关于多模态的大新闻,decision,True,"R:True, O:True"
+今天arXiv上有什么有趣的论文,decision,False,"R:True, O:False"
+LLaMA的最新版本,decision,True,"R:True, O:True"
+2023年图灵奖得主,decision,False,"R:False, O:False"
+本月AI融资事件,decision,False,"R:False, O:False"
+昨天OpenAI发布的新功能,decision,False,"R:False, O:False"
+今年的NeurIPS举办地点,decision,False,"R:False, O:False"
+帮我总结一下,decision,False,"R:True, O:False"
+接着讲,decision,True,"R:False, O:False"
+还有呢,decision,True,"R:False, O:False"
+详细解释一下,decision,False,"R:True, O:False"
+用中文回答,decision,True,"R:False, O:False"
+给出代码示例,decision,False,"R:False, O:False"
+最新进展,decision,True,"R:True, O:True"
+还有别的类似模型吗,decision,True,"R:True, O:False"
+它和ViT的区别,decision,True,"R:True, O:False"
+这个领域的未来趋势,decision,False,"R:False, O:False"
+最新的benchmark结果,decision,True,"R:True, O:True"
+2026年预测,decision,False,"R:True, O:False"
+今天天气,decision,False,"R:False, O:False"
+现在几点了,decision,True,"R:False, O:False"
+计算 123*456,decision,True,"R:False, O:False"
+Python 3.10的新特性,decision,False,"R:False, O:False"
+torch.compile如何使用,decision,False,"R:False, O:False"
+如何优化PyTorch训练速度,decision,False,"R:False, O:False"
+Diffusion Models beat GANs 论文,decision,True,"R:True, O:False"
+2025年最新图像生成模型,decision,True,"R:True, O:True"
+最近有没有关于AGI的讨论,decision,True,"R:True, O:True"
+本周AI热点,decision,False,"R:True, O:False"
+2024年诺贝尔物理学奖,decision,False,"R:False, O:False"
+谁是美国总统,decision,False,"R:False, O:False"
+苹果公司股价,decision,False,"R:True, O:False"
+推荐几本深度学习书,decision,False,"R:False, O:False"
+怎样写一篇顶会论文,decision,False,"R:False, O:False"
+如何复现GPT-3,decision,True,"R:True, O:False"
+Llama 3 有多少参数,decision,True,"R:False, O:False"
+介绍一下MoE,decision,False,"R:True, O:False"

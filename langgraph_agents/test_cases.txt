@@ -1,0 +1,151 @@
+{"category": "correction", "input": "asdfghjkl", "expected": "invalid", "context": {}}
+{"category": "correction", "input": "!@#$%^", "expected": "invalid", "context": {}}
+{"category": "correction", "input": "qwerty123", "expected": "invalid", "context": {}}
+{"category": "correction", "input": "   ", "expected": "invalid", "context": {}}
+{"category": "correction", "input": ".,;:", "expected": "invalid", "context": {}}
+{"category": "correction", "input": "测试乱码~!@", "expected": "invalid", "context": {}}
+{"category": "correction", "input": "123456", "expected": "invalid", "context": {}}
+{"category": "correction", "input": "abcdefg", "expected": "invalid", "context": {}}
+{"category": "correction", "input": "?!?!?!", "expected": "invalid", "context": {}}
+{"category": "correction", "input": "     ", "expected": "invalid", "context": {}}
+{"category": "correction", "input": "AI papers in 2026", "expected": "latest/recent", "context": {}}
+{"category": "correction", "input": "Transformer in 2035", "expected": "latest/recent", "context": {}}
+{"category": "correction", "input": "LLM trends 2027", "expected": "latest/recent", "context": {}}
+{"category": "correction", "input": "2028 breakthroughs in NLP", "expected": "latest/recent", "context": {}}
+{"category": "correction", "input": "future of AI 2029", "expected": "latest/recent", "context": {}}
+{"category": "correction", "input": "CVPR 2030 accepted papers", "expected": "latest/recent", "context": {}}
+{"category": "correction", "input": "new models 2031", "expected": "latest/recent", "context": {}}
+{"category": "correction", "input": "research trends 2032", "expected": "latest/recent", "context": {}}
+{"category": "correction", "input": "2024 papers (future)", "expected": "latest/recent", "context": {}}
+{"category": "correction", "input": "AI summit 2033", "expected": "latest/recent", "context": {}}
+{"category": "correction", "input": "BERT model explain", "expected": "BERT", "context": {}}
+{"category": "correction", "input": "GP3 architecture", "expected": "GPT-3", "context": {}}
+{"category": "correction", "input": "Tranformer layer", "expected": "Transformer", "context": {}}
+{"category": "correction", "input": "LSTM vs GRU diffs", "expected": "LSTM vs GRU differences", "context": {}}
+{"category": "correction", "input": "Attenion is all you need", "expected": "Attention is all you need", "context": {}}
+{"category": "correction", "input": "Reinforcment learning", "expected": "Reinforcement learning", "context": {}}
+{"category": "correction", "input": "Neural netwrok", "expected": "Neural network", "context": {}}
+{"category": "correction", "input": "Convolutionl neural network", "expected": "Convolutional neural network", "context": {}}
+{"category": "correction", "input": "Recurrent neual network", "expected": "Recurrent neural network", "context": {}}
+{"category": "correction", "input": "Generative adversial network", "expected": "Generative adversarial network", "context": {}}
+{"category": "fusion", "input": "它的主要贡献是什么？", "expected": "Transformer的主要贡献是什么？", "context": {"history": [{"role": "user", "content": "介绍一下Transformer模型"}]}}
+{"category": "fusion", "input": "和CNN相比呢？", "expected": "ViT和CNN相比呢？", "context": {"history": [{"role": "user", "content": "ViT模型怎么样"}]}}
+{"category": "fusion", "input": "它的训练方法有哪些？", "expected": "BERT的训练方法有哪些？", "context": {"history": [{"role": "user", "content": "BERT预训练"}]}}
+{"category": "fusion", "input": "那它的缺点呢？", "expected": "GPT-3的缺点呢？", "context": {"history": [{"role": "user", "content": "GPT-3有哪些优点"}]}}
+{"category": "fusion", "input": "具体怎么实现？", "expected": "LoRA具体怎么实现？", "context": {"history": [{"role": "user", "content": "LoRA微调原理"}]}}
+{"category": "fusion", "input": "这个方法的收敛速度如何？", "expected": "AdamW优化器的收敛速度如何？", "context": {"history": [{"role": "user", "content": "AdamW优化器"}]}}
+{"category": "fusion", "input": "它适合小样本吗？", "expected": "Prefix-tuning适合小样本吗？", "context": {"history": [{"role": "user", "content": "什么是Prefix-tuning"}]}}
+{"category": "fusion", "input": "它的参数量是多少？", "expected": "T5的参数量是多少？", "context": {"history": [{"role": "user", "content": "T5模型介绍"}]}}
+{"category": "fusion", "input": "能用于文本生成吗？", "expected": "BART能用于文本生成吗？", "context": {"history": [{"role": "user", "content": "BART模型"}]}}
+{"category": "fusion", "input": "它的代码开源吗？", "expected": "CLIP的代码开源吗？", "context": {"history": [{"role": "user", "content": "CLIP模型"}]}}
+{"category": "fusion", "input": "它和BERT比哪个好？", "expected": "RoBERTa和BERT比哪个好？", "context": {"history": [{"role": "user", "content": "RoBERTa模型"}]}}
+{"category": "fusion", "input": "它的损失函数是什么？", "expected": "SimCLR的损失函数是什么？", "context": {"history": [{"role": "user", "content": "SimCLR自监督学习"}]}}
+{"category": "fusion", "input": "它支持中文吗？", "expected": "XLM-R支持中文吗？", "context": {"history": [{"role": "user", "content": "XLM-R模型"}]}}
+{"category": "fusion", "input": "这个算法的复杂度？", "expected": "FlashAttention的复杂度？", "context": {"history": [{"role": "user", "content": "FlashAttention"}]}}
+{"category": "fusion", "input": "它的应用场景有哪些？", "expected": "Diffusion models的应用场景有哪些？", "context": {"history": [{"role": "user", "content": "Diffusion models"}]}}
+{"category": "fusion", "input": "那它的变体呢？", "expected": "GAN的变体呢？", "context": {"history": [{"role": "user", "content": "GAN有哪些"}]}}
+{"category": "fusion", "input": "如何训练它？", "expected": "如何训练VAE？", "context": {"history": [{"role": "user", "content": "VAE"}]}}
+{"category": "fusion", "input": "这个框架的优缺点？", "expected": "这个框架PyTorch的优缺点？", "context": {"history": [{"role": "user", "content": "PyTorch框架"}]}}
+{"category": "fusion", "input": "它的最新进展？", "expected": "Swin Transformer的最新进展？", "context": {"history": [{"role": "user", "content": "Swin Transformer"}]}}
+{"category": "fusion", "input": "有没有改进版本？", "expected": "有没有改进版本的ResNet？", "context": {"history": [{"role": "user", "content": "ResNet"}]}}
+{"category": "expansion", "input": "Neural Machine Translation", "expected": "NMT", "context": {}}
+{"category": "expansion", "input": "Large Language Model", "expected": "LLM", "context": {}}
+{"category": "expansion", "input": "Vision Transformer", "expected": "ViT", "context": {}}
+{"category": "expansion", "input": "Generative Pre-trained Transformer", "expected": "GPT", "context": {}}
+{"category": "expansion", "input": "Bidirectional Encoder Representations from Transformers", "expected": "BERT", "context": {}}
+{"category": "expansion", "input": "Variational Autoencoder", "expected": "VAE", "context": {}}
+{"category": "expansion", "input": "Generative Adversarial Network", "expected": "GAN", "context": {}}
+{"category": "expansion", "input": "Mean Squared Error", "expected": "MSE", "context": {}}
+{"category": "expansion", "input": "Stochastic Gradient Descent", "expected": "SGD", "context": {}}
+{"category": "expansion", "input": "Area Under the Curve", "expected": "AUC", "context": {}}
+{"category": "expansion", "input": "Convolutional Neural Network", "expected": "CNN", "context": {}}
+{"category": "expansion", "input": "Recurrent Neural Network", "expected": "RNN", "context": {}}
+{"category": "expansion", "input": "Long Short-Term Memory", "expected": "LSTM", "context": {}}
+{"category": "expansion", "input": "Gated Recurrent Unit", "expected": "GRU", "context": {}}
+{"category": "expansion", "input": "Natural Language Processing", "expected": "NLP", "context": {}}
+{"category": "expansion", "input": "Computer Vision", "expected": "CV", "context": {}}
+{"category": "expansion", "input": "Reinforcement Learning", "expected": "RL", "context": {}}
+{"category": "expansion", "input": "few-shot learning", "expected": "FSL", "context": {}}
+{"category": "expansion", "input": "zero-shot learning", "expected": "ZSL", "context": {}}
+{"category": "expansion", "input": "multimodal learning", "expected": "no_expansion_needed", "context": {}}
+{"category": "expansion", "input": "Microsoft", "expected": "no_fruit_expansion", "context": {}}
+{"category": "parent", "input": "RAG是什么", "expected": "Retrieval-Augmented Generation 的定义和原理", "context": {}}
+{"category": "parent", "input": "怎么微调LLM", "expected": "大语言模型微调的方法和步骤", "context": {}}
+{"category": "parent", "input": "transformer结构", "expected": "Transformer 模型的架构详解", "context": {}}
+{"category": "parent", "input": "BERT和GPT区别", "expected": "BERT 和 GPT 的详细对比分析", "context": {}}
+{"category": "parent", "input": "注意力机制", "expected": "注意力机制的原理、变体及应用", "context": {}}
+{"category": "parent", "input": "对比学习", "expected": "对比学习在自监督学习中的应用综述", "context": {}}
+{"category": "parent", "input": "扩散模型", "expected": "扩散模型的数学原理和生成过程", "context": {}}
+{"category": "parent", "input": "提示工程", "expected": "提示工程（Prompt Engineering）的技巧和研究", "context": {}}
+{"category": "parent", "input": "模型蒸馏", "expected": "知识蒸馏的方法和应用", "context": {}}
+{"category": "parent", "input": "量化", "expected": "神经网络量化技术详解", "context": {}}
+{"category": "parent", "input": "稀疏注意力", "expected": "稀疏注意力机制的实现与优势", "context": {}}
+{"category": "parent", "input": "位置编码", "expected": "Transformer中的位置编码方法比较", "context": {}}
+{"category": "parent", "input": "分词器", "expected": "Tokenizer的工作原理和常见类型", "context": {}}
+{"category": "parent", "input": "参数高效微调", "expected": "Parameter-Efficient Fine-Tuning (PEFT) 方法综述", "context": {}}
+{"category": "parent", "input": "幻觉问题", "expected": "大语言模型幻觉问题的成因与缓解策略", "context": {}}
+{"category": "decomposition", "input": "比较CNN和ViT的优缺点", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "RAG的检索器和生成器如何协同", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "训练GPT-3需要多少数据和多长时间", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "BERT的预训练任务是什么？如何微调？", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "LoRA和Prefix-tuning在效果和效率上有什么区别", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "Transformer的编码器和解码器各有什么作用", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "如何评估生成模型的性能？常用的指标有哪些？", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "解释梯度消失和梯度爆炸，以及解决方案", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "SWIN Transformer的窗口划分和移位策略", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "对比有监督学习和自监督学习", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "什么是知识蒸馏？如何用于模型压缩？", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "RLHF的步骤：奖励建模和PPO优化", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "Batch Norm和Layer Norm的区别与联系", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "NeRF的体渲染和位置编码", "expected": "multiple_queries", "context": {}}
+{"category": "decomposition", "input": "CLIP的对比损失和双编码器结构", "expected": "multiple_queries", "context": {}}
+{"category": "decision", "input": "什么是反向传播", "expected_retrieval": false, "expected_online": false, "context": {}}
+{"category": "decision", "input": "SVM的核函数有哪些", "expected_retrieval": false, "expected_online": false, "context": {}}
+{"category": "decision", "input": "交叉熵损失函数公式", "expected_retrieval": false, "expected_online": false, "context": {}}
+{"category": "decision", "input": "Hinton是谁", "expected_retrieval": false, "expected_online": false, "context": {}}
+{"category": "decision", "input": "深度学习三巨头", "expected_retrieval": false, "expected_online": false, "context": {}}
+{"category": "decision", "input": "attention is all you need 论文作者", "expected_retrieval": false, "expected_online": false, "context": {}}
+{"category": "decision", "input": "pytorch和tensorflow哪个好", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "如何安装CUDA", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "huggingface transformers库的常用函数", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "BERT的代码实现", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "2024年ACL最佳论文", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "最新发布的GPT-4细节", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "2025年AI顶会日程", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "最近有什么关于多模态的大新闻", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "今天arXiv上有什么有趣的论文", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "LLaMA的最新版本", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "2023年图灵奖得主", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "本月AI融资事件", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "昨天OpenAI发布的新功能", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "今年的NeurIPS举办地点", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "帮我总结一下", "expected_retrieval": false, "expected_online": false, "context": {"history": [{"role": "user", "content": "刚才那篇RAG论文讲了什么"}]}}
+{"category": "decision", "input": "接着讲", "expected_retrieval": false, "expected_online": false, "context": {"history": [{"role": "user", "content": "介绍一下Transformer"}]}}
+{"category": "decision", "input": "还有呢", "expected_retrieval": false, "expected_online": false, "context": {"history": [{"role": "user", "content": "BERT的预训练任务"}]}}
+{"category": "decision", "input": "详细解释一下", "expected_retrieval": false, "expected_online": false, "context": {"history": [{"role": "user", "content": "什么是注意力机制"}]}}
+{"category": "decision", "input": "用中文回答", "expected_retrieval": false, "expected_online": false, "context": {"history": [{"role": "user", "content": "什么是few-shot learning"}]}}
+{"category": "decision", "input": "给出代码示例", "expected_retrieval": true, "expected_online": false, "context": {"history": [{"role": "user", "content": "如何使用transformers库加载BERT"}]}}
+{"category": "decision", "input": "最新进展", "expected_retrieval": true, "expected_online": true, "context": {"history": [{"role": "user", "content": "RLHF"}]}}
+{"category": "decision", "input": "还有别的类似模型吗", "expected_retrieval": true, "expected_online": false, "context": {"history": [{"role": "user", "content": "介绍一下CLIP模型"}]}}
+{"category": "decision", "input": "它和ViT的区别", "expected_retrieval": true, "expected_online": false, "context": {"history": [{"role": "user", "content": "Swin Transformer"}]}}
+{"category": "decision", "input": "这个领域的未来趋势", "expected_retrieval": true, "expected_online": true, "context": {"history": [{"role": "user", "content": "AI for science"}]}}
+{"category": "decision", "input": "最新的benchmark结果", "expected_retrieval": true, "expected_online": true, "context": {"history": [{"role": "user", "content": "GLUE榜单"}]}}
+{"category": "decision", "input": "2026年预测", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "今天天气", "expected_retrieval": false, "expected_online": true, "context": {}}  
+{"category": "decision", "input": "现在几点了", "expected_retrieval": false, "expected_online": false, "context": {}}  
+{"category": "decision", "input": "计算 123*456", "expected_retrieval": false, "expected_online": false, "context": {}}
+{"category": "decision", "input": "Python 3.10的新特性", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "torch.compile如何使用", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "如何优化PyTorch训练速度", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "Diffusion Models beat GANs 论文", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "2025年最新图像生成模型", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "最近有没有关于AGI的讨论", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "本周AI热点", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "2024年诺贝尔物理学奖", "expected_retrieval": true, "expected_online": true, "context": {}}
+{"category": "decision", "input": "谁是美国总统", "expected_retrieval": false, "expected_online": true, "context": {}}  
+{"category": "decision", "input": "苹果公司股价", "expected_retrieval": false, "expected_online": true, "context": {}}  
+{"category": "decision", "input": "推荐几本深度学习书", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "怎样写一篇顶会论文", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "如何复现GPT-3", "expected_retrieval": true, "expected_online": false, "context": {}}
+{"category": "decision", "input": "Llama 3 有多少参数", "expected_retrieval": false, "expected_online": false, "context": {}}  
+{"category": "decision", "input": "介绍一下MoE", "expected_retrieval": false, "expected_online": false, "context": {}}
