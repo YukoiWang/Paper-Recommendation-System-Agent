@@ -13,6 +13,8 @@ if _root not in sys.path:
 
 from agent.models import Paper, UserProfile
 
+from langgraph_agents.retrieval_query_rewrite import apply_multilabel_retrieval_rewrite
+
 logger = logging.getLogger(__name__)
 
 
@@ -175,10 +177,17 @@ class OnlineSearchAgent:
         Keyword priority: final_query / optimized_query > user_query > profile.
         """
         profile = state.get("user_profile")
-        query = (
+        base_query = (
             state.get("final_query")
             or state.get("optimized_query")
             or state.get("user_query", "")
+        )
+        labels = list(state.get("rerank_labels") or [])
+        query, _ = apply_multilabel_retrieval_rewrite(
+            base_query=(base_query or "").strip(),
+            sub_queries=[],
+            labels=labels,
+            state=state,
         )
         profile_kw, categories = _profile_to_keywords(profile)
 
@@ -201,10 +210,17 @@ class OnlineSearchAgent:
     async def run_async(self, state: dict) -> dict:
         """Async: same as run but can call Semantic Scholar."""
         profile = state.get("user_profile")
-        query = (
+        base_query = (
             state.get("final_query")
             or state.get("optimized_query")
             or state.get("user_query", "")
+        )
+        labels = list(state.get("rerank_labels") or [])
+        query, _ = apply_multilabel_retrieval_rewrite(
+            base_query=(base_query or "").strip(),
+            sub_queries=[],
+            labels=labels,
+            state=state,
         )
         profile_kw, categories = _profile_to_keywords(profile)
         query_kw = _extract_query_keywords(query)

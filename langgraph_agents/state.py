@@ -45,6 +45,23 @@ class WorkflowState(TypedDict, total=False):
     ranked_papers: List[Paper]
     final_papers: List[Paper]
     top_k: int
+
+    # --- Rerank expert loop (diagnostics; routing reads these) ---
+    round: int
+    last_rerank_score: float
+    rerank_score: float
+    rerank_diagnosis: str
+    rerank_labels: List[str]
+    rerank_primary: str
+    rerank_suggestion: str
+    rerank_confidence: float
+    rerank_reasoning: str
+    rerank_evidence: Dict[str, Any]
+    qa_preference_score: float
+    qa_rerank_count: int
+    qa_needs_rerank: bool
+    qa_feedback_for_rerank: str
+    after_rank_dest: str
     # Eval alignment: when set, QA uses only this many papers and abstract chars (same as Ragas context).
     max_context_papers: Optional[int]
     max_context_abstract_chars: Optional[int]

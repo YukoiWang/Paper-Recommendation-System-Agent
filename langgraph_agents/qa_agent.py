@@ -168,6 +168,87 @@ TONE_DEFAULT = """\
 - No strong signal about the user's level. Use a clear, neutral tone: avoid both oversimplification and unnecessary jargon. Prefer clarity."""
 
 
+def _tokenize_pref(text: str) -> set:
+    return {w for w in re.findall(r"[\w\u4e00-\u9fff]+", (text or "").lower()) if len(w) > 1}
+
+
+def _compute_qa_preference_score(state: Dict[str, Any], papers: List[Paper]) -> float:
+    """Match ranked papers to user profile + conversation_state + recent user turns (0–1)."""
+    if not papers:
+        return 1.0
+    profile = state.get("user_profile")
+    conv = state.get("conversation_state") or {}
+    history = state.get("history", [])
+    parts: List[str] = []
+    if profile:
+        if getattr(profile, "interest_text", ""):
+            parts.append(str(profile.interest_text))
+        parts.extend(list(getattr(profile, "preferred_categories", None) or []))
+        parts.extend(list(getattr(profile, "special_requirements", None) or [])[:6])
+    parts.extend(conv.get("keywords", []) or [])
+    parts.extend(conv.get("research_topics", []) or [])
+    for m in history[-6:]:
+        if m.get("role") == "user":
+            parts.append(str(m.get("content", "")[:240]))
+    pref_blob = " ".join(str(p) for p in parts).lower()
+    pref_tokens = _tokenize_pref(pref_blob)
+    paper_chunks: List[str] = []
+    for p in papers[:12]:
+        paper_chunks.append((p.title or "").lower())
+        paper_chunks.append(" ".join(p.categories or []).lower())
+        paper_chunks.append((p.abstract or "")[:320].lower())
+    paper_blob = " ".join(paper_chunks)
+    paper_tokens = _tokenize_pref(paper_blob)
+    if not pref_tokens:
+        return 0.82
+    inter = len(pref_tokens & paper_tokens)
+    j = inter / max(1, len(pref_tokens))
+    cat_user = {c.lower() for c in (getattr(profile, "preferred_categories", None) or [])} if profile else set()
+    cat_papers: set = set()
+    for p in papers[:12]:
+        for c in p.categories or []:
+            cat_papers.add(c.lower())
+    if cat_user:
+        cat_match = len(cat_user & cat_papers) / max(1, len(cat_user))
+    else:
+        cat_match = 0.55
+    score = 0.5 * j + 0.5 * cat_match
+    return max(0.0, min(1.0, float(score)))
+
+
+def _build_qa_rerank_feedback(state: Dict[str, Any], papers: List[Paper], score: float) -> str:
+    conv = state.get("conversation_state") or {}
+    profile = state.get("user_profile")
+    topics = ", ".join((conv.get("research_topics") or [])[:6])
+    cats = ", ".join(list(getattr(profile, "preferred_categories", None) or [])[:6]) if profile else ""
+    titles = "; ".join(((p.title or "")[:80]) for p in papers[:5])
+    return (
+        f"qa_preference_score={score:.2f}; user_topics={topics}; user_categories={cats}; "
+        f"bias rerank toward these signals. sample_titles={titles}"
+    )
+
+
+def _safe_json_loads(raw: str) -> Optional[Dict[str, Any]]:
+    if not raw:
+        return None
+    s = raw.strip()
+    if s.startswith("```"):
+        s = s.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    try:
+        obj = json.loads(s)
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        pass
+    m = re.search(r"\{[\s\S]*\}", s)
+    if not m:
+        return None
+    try:
+        obj = json.loads(m.group(0))
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
+
 def _get_tone_instruction(state: Dict[str, Any]) -> str:
     """Return system prompt block for tone/style based on user_profile.expertise_level or conversation_state.inferred_expertise."""
     profile = state.get("user_profile")
@@ -324,6 +405,61 @@ class PaperQAAgent:
         self.max_abstract_chars = max_abstract_chars
         logger.info("PaperQAAgent init: model=%s", model)
 
+    def _llm_natural_qa_rerank_bundle(
+        self,
+        state: Dict[str, Any],
+        papers: List[Paper],
+        score: float,
+    ) -> tuple[str, str]:
+        """Return (user_visible_message, rerank_instruction_for_rank_query)."""
+        query = (state.get("user_query") or "").strip()
+        conv = state.get("conversation_state") or {}
+        profile = state.get("user_profile")
+        prof_bits: List[str] = []
+        if profile:
+            if getattr(profile, "interest_text", ""):
+                prof_bits.append(f"interest: {profile.interest_text}")
+            if getattr(profile, "preferred_categories", None):
+                prof_bits.append("categories: " + ", ".join(profile.preferred_categories[:8]))
+        conv_bits = []
+        if conv.get("research_topics"):
+            conv_bits.append("topics: " + ", ".join(conv.get("research_topics")[:8]))
+        if conv.get("keywords"):
+            conv_bits.append("keywords: " + ", ".join(conv.get("keywords")[:10]))
+        paper_lines = []
+        for i, p in enumerate(papers[:5]):
+            ab = (p.abstract or "")[:220].replace("\n", " ")
+            cats = ", ".join((p.categories or [])[:6])
+            paper_lines.append(
+                f"[{i+1}] title={p.title!r} year={getattr(p, 'published', '')!r} cats={cats!r} abs={ab!r}"
+            )
+        prompt = (
+            "You are a UX + recommendation alignment expert.\n"
+            "The ranked papers do not match the user's preferences/context well.\n"
+            "Return JSON only (no markdown fences).\n"
+            "Fields:\n"
+            '- "user_message": 1-2 sentences, same language as user_query, explain mismatch gently.\n'
+            '- "rerank_instruction": 2-5 sentences, actionable instructions for a reranker query side. '
+            "Mention which papers/aspects are off and what to emphasize instead (topics, venues, methods, recency).\n"
+            f"qa_preference_score={score:.3f}\n"
+            f"user_query: {query}\n"
+            f"profile: {'; '.join(prof_bits) or '(none)'}\n"
+            f"conversation_state: {'; '.join(conv_bits) or '(none)'}\n"
+            "ranked_papers:\n" + "\n".join(paper_lines) + "\n"
+            "JSON schema:\n"
+            '{"user_message":"...","rerank_instruction":"..."}\n'
+        )
+        try:
+            raw = self.llm.chat([{"role": "system", "content": prompt}], temperature=0.2, max_tokens=420)
+            data = _safe_json_loads(raw) or {}
+            um = (data.get("user_message") or "").strip()
+            ins = (data.get("rerank_instruction") or "").strip()
+            if um and ins:
+                return um[:500], ins[:1200]
+        except Exception as e:
+            logger.warning("QA natural rerank bundle LLM failed: %s", e)
+        return "", ""
+
     # ---------------------------------------------------------------
     # Entry point 1: respond — main conversation + answer synthesis
     # ---------------------------------------------------------------
@@ -344,6 +480,50 @@ class PaperQAAgent:
         papers = state.get("final_papers") or state.get("ranked_papers") or []
         cited = dict(state.get("cited_papers", {}))
         evaluation_mode = bool(state.get("evaluation_mode", False))
+
+        decision = state.get("planner_decision") or {}
+        route = (decision.get("route") or "").upper()
+        papers_for_pref = list(papers)
+        qa_pref = _compute_qa_preference_score(state, papers_for_pref) if papers_for_pref else 1.0
+        state["qa_preference_score"] = qa_pref
+
+        # One-shot QA → rerank when preferences poorly match the ranked list (retrieval path).
+        if (
+            papers_for_pref
+            and route == "RETRIEVE_LOCAL"
+            and not evaluation_mode
+            and qa_pref < 0.7
+            and int(state.get("qa_rerank_count", 0)) == 0
+        ):
+            fb = _build_qa_rerank_feedback(state, papers_for_pref, qa_pref)
+            short = (
+                "当前推荐列表与您的画像及对话上下文的匹配度偏低，"
+                "我将根据您的偏好重新排序论文后再给出完整回答。"
+            )
+            um, ins = self._llm_natural_qa_rerank_bundle(state, papers_for_pref, qa_pref)
+            if um:
+                short = um
+            if ins:
+                fb = ins
+            new_history = self._append_and_trim(
+                history, query, short, {"qa_preference_score": qa_pref, "action": "qa_rerank"},
+            )
+            conv_state = self._summarize_conversation_state(new_history)
+            out: Dict[str, Any] = {
+                **state,
+                "response": short,
+                "history": new_history,
+                "cited_papers": cited,
+                "conversation_state": conv_state,
+                "qa_preference_score": qa_pref,
+                "qa_needs_rerank": True,
+                "qa_feedback_for_rerank": fb,
+                "_rank_from_qa": True,
+            }
+            is_first_turn = not history and not state.get("profile_asked", False)
+            if is_first_turn and not evaluation_mode:
+                out["profile_asked"] = True
+            return out
 
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
@@ -375,9 +555,7 @@ class PaperQAAgent:
                 ),
             })
 
-        decision = state.get("planner_decision") or {}
         did_online = decision.get("do_online_search", False)
-        route = (decision.get("route") or "").upper()
         online_count = len(state.get("online_search_result") or [])
         if did_online:
             online_note = (
@@ -478,6 +656,8 @@ class PaperQAAgent:
             "history": new_history,
             "cited_papers": cited,
             "conversation_state": conv_state,
+            "qa_preference_score": qa_pref,
+            "qa_needs_rerank": False,
         }
 
         # Expose NO_RETRIEVAL confidence signals back to workflow.

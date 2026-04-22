@@ -162,7 +162,7 @@ class RecallAgent:
         stats["rule_recall"] = len(rule_results)
         icf_results = itemcf_recall(user, self.retrieval.store, self.retrieval._cache, top_k_total=self.top_k_itemcf)
         stats["itemcf_recall"] = len(icf_results)
-        merged = merge_results(vec_results, rule_results, icf_results, top_k=top_k)
+        merged = merge_results(vec_results, rule_results, icf_results, top_k=top_k, method="rrf")
         stats["merged"] = len(merged)
         if is_cold and len(merged) < self.trending_count:
             existing_ids = {pid for pid, _ in merged}

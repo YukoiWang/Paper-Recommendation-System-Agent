@@ -1,14 +1,10 @@
-"""LangGraph workflow: planner → retrieval/recall/online → rank → QA.
+"""LangGraph workflow: planner → parallel retrieval+search / recall → rank → QA.
 
-Graph structure (updated for new Planner routing):
-  planner ──→ respond ──→ END                         (NO_RETRIEVAL)
-          ├─→ ask_clarify ──→ END                      (NEED_CLARIFY)
-          ├─→ handle_feedback ──→ END                  (HANDLE_FEEDBACK)
-          ├─→ retrieval ──→ evaluate ──┬→ fuse → rank → respond → END   (SUFFICIENT / PARTIAL)
-          │                            ├→ re_retrieve → evaluate (loop, max 2 retries)
-          │                            ├→ fuse → rank → respond → END   (retries exhausted, has papers)
-          │                            └→ ask_clarify → END             (retries exhausted, no papers)
-          └─→ online_search ──→ recall ──→ rank ──→ respond ──→ END
+Graph highlights:
+  - RETRIEVE_LOCAL (non-daily): parallel_fetch (retrieval + online) → evaluate → fuse → rank
+  - rank → respond | retrieval | online_search (rerank diagnosis + round/delta caps)
+  - QA may route back to rank once when preference score is low
+  - Retrieval evaluate → fuse only (no re_retrieve loop; reranker loop owns retries)
 """
 from __future__ import annotations
 import logging
@@ -37,6 +33,8 @@ from langgraph_agents.planner_agent import (
 )
 from langgraph_agents.qa_agent import PaperQAAgent
 from langgraph_agents.rank_agent import RankAgent
+from langgraph_agents.rerank_diagnosis import hybrid_diagnose_rerank
+from langgraph_agents.retrieval_query_rewrite import apply_multilabel_retrieval_rewrite
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +63,27 @@ def build_workflow(
 
     def planner_node(state: WorkflowState) -> WorkflowState:
         """Planner: query pipeline + routing + retrieval evaluation."""
+        # New-turn reset for rerank / QA preference loops (blackboard fields)
+        state["round"] = 0
+        state["last_rerank_score"] = 0.0
+        state["rerank_score"] = 0.0
+        state["rerank_diagnosis"] = ""
+        state["rerank_labels"] = []
+        state["rerank_primary"] = ""
+        state["rerank_confidence"] = 0.0
+        state["rerank_reasoning"] = ""
+        state["rerank_evidence"] = {}
+        state["rerank_suggestion"] = ""
+        state["qa_preference_score"] = 0.0
+        state["qa_rerank_count"] = 0
+        state["qa_needs_rerank"] = False
+        state["qa_feedback_for_rerank"] = ""
+        state["after_rank_dest"] = "respond"
+        state["retrieval_retry_count"] = 0
+        state.pop("_online_then_fuse_only", None)
+        state.pop("_had_prior_rerank_score", None)
+        state.pop("_rank_from_qa", None)
+
         updated = planner.plan(dict(state))
         state["plan"] = updated.get("plan")
         state["planner_decision"] = updated.get("planner_decision")
@@ -77,6 +96,12 @@ def build_workflow(
             state["online_offline_fusion_ratio"] = updated["online_offline_fusion_ratio"]
         return state
 
+    def parallel_fetch_node(state: WorkflowState) -> WorkflowState:
+        """Explicit query path: local retrieval + online search (sequential, both results)."""
+        retrieval_node(state)
+        online_search_node(state)
+        return state
+
     def online_search_node(state: WorkflowState) -> WorkflowState:
         """Fetch papers from ArXiv / Semantic Scholar."""
         result = online.run(dict(state))
@@ -85,9 +110,16 @@ def build_workflow(
 
     def retrieval_node(state: WorkflowState) -> WorkflowState:
         """Query-based vector retrieval using optimized/final query and sub-queries."""
-        query = state.get("final_query") or state.get("optimized_query") or state.get("user_query", "")
+        base_query = state.get("final_query") or state.get("optimized_query") or state.get("user_query", "")
+        sub_queries = list(state.get("sub_queries") or [])
+        labels = list(state.get("rerank_labels") or [])
+        query, sub_queries = apply_multilabel_retrieval_rewrite(
+            base_query=base_query,
+            sub_queries=sub_queries,
+            labels=labels,
+            state=dict(state),
+        )
         top_k = state.get("top_k", default_top_k) * 2
-        sub_queries = state.get("sub_queries", [])
 
         if sub_queries:
             per_sub_k = max(top_k // len(sub_queries), 5)
@@ -112,12 +144,8 @@ def build_workflow(
             state["retrieval_result"] = papers
         return state
 
-    MAX_RETRIEVAL_RETRIES = 2
-
     def evaluate_node(state: WorkflowState) -> WorkflowState:
-        """Planner evaluates retrieval quality; tracks retry count."""
-        retry_count = state.get("retrieval_retry_count", 0)
-
+        """Planner evaluates retrieval quality (no re-retrieve loop; reranker owns retries)."""
         user_query = state.get("user_query", "")
         optimized_query = state.get("optimized_query", user_query)
         retrieved = state.get("retrieval_result", [])
@@ -127,32 +155,17 @@ def build_workflow(
         state["planner_decision"] = decision
 
         quality = evaluation.get("quality", "SUFFICIENT")
-        has_refined = bool(evaluation.get("suggested_refined_query"))
-        can_retry = quality == "INSUFFICIENT" and has_refined and retry_count < MAX_RETRIEVAL_RETRIES
-
-        if can_retry:
+        if quality == "INSUFFICIENT" and evaluation.get("suggested_refined_query"):
             state["optimized_query"] = evaluation["suggested_refined_query"]
-            state["retrieval_retry_count"] = retry_count + 1
             logger.info(
-                "evaluate: INSUFFICIENT (retry %d/%d), refined_query='%s'",
-                retry_count + 1, MAX_RETRIEVAL_RETRIES,
+                "evaluate: INSUFFICIENT — applying suggested_refined_query='%s' (single pass)",
                 evaluation["suggested_refined_query"][:60],
             )
-        elif quality == "INSUFFICIENT":
+        if quality == "INSUFFICIENT":
             state["retrieval_insufficient"] = True
-            reason = "retries exhausted" if retry_count >= MAX_RETRIEVAL_RETRIES else "no refined query available"
-            logger.info("evaluate: INSUFFICIENT — giving up (%s, retry=%d)", reason, retry_count)
         else:
             state["retrieval_insufficient"] = False
 
-        return state
-
-    def re_retrieve_node(state: WorkflowState) -> WorkflowState:
-        """Re-retrieve with refined query after evaluation found INSUFFICIENT."""
-        query = state.get("optimized_query") or state.get("user_query", "")
-        top_k = state.get("top_k", default_top_k) * 2
-        papers = retrieval.retrieve_by_query(query, top_k=top_k)
-        state["retrieval_result"] = papers
         return state
 
     def recall_node(state: WorkflowState) -> WorkflowState:
@@ -184,18 +197,138 @@ def build_workflow(
         return state
 
     def rank_node(state: WorkflowState) -> WorkflowState:
-        """Rerank fused candidates."""
+        """Rerank fused candidates + expert diagnosis + next-step routing hint."""
+        from_qa = bool(state.pop("_rank_from_qa", False))
+        if state.pop("qa_needs_rerank", False):
+            state["qa_rerank_count"] = int(state.get("qa_rerank_count", 0)) + 1
+
         fused = state.get("fused_candidates", [])
         if not fused:
             state["ranked_papers"] = []
             state["final_papers"] = []
+            state["rerank_score"] = 0.0
+            state["rerank_diagnosis"] = "A"
+            state["rerank_labels"] = ["A"]
+            state["rerank_primary"] = "A"
+            state["rerank_suggestion"] = "候选为空，无法排序；请尝试放宽检索条件。"
+            state["after_rank_dest"] = "respond"
             return state
+
         profile = state.get("user_profile") or UserProfile(user_id=state.get("user_id", "anonymous"))
-        query = state.get("optimized_query") or state.get("user_query", "") or (profile.interest_text if profile else "")
+        base_query = (
+            state.get("optimized_query")
+            or state.get("user_query", "")
+            or (profile.interest_text if profile else "")
+        )
+        qa_fb = (state.get("qa_feedback_for_rerank") or "").strip()
+        if qa_fb and int(state.get("qa_rerank_count", 0)) > 0:
+            query_for_rank = f"{base_query}\n[QA preference feedback for reranking]\n{qa_fb}"
+        else:
+            query_for_rank = base_query
+
         top_k = state.get("top_k", default_top_k)
-        ranked = rank.rerank(fused, query=query, user=profile, top_k=top_k)
+        ranked = rank.rerank(fused, query=query_for_rank, user=profile, top_k=top_k)
         state["ranked_papers"] = ranked
         state["final_papers"] = ranked[:top_k]
+
+        # Daily recommendation path: no retrieval-based rerank loop.
+        if state.get("is_daily_rec"):
+            user_query = state.get("user_query", "")
+            optimized_query = state.get("optimized_query", user_query)
+            retrieval_result = list(state.get("retrieval_result") or [])
+            online_search_result = list(state.get("online_search_result") or [])
+            api_key = str(state.get("api_key") or "")
+            base_url = str(state.get("base_url") or "https://api.deepseek.com")
+            model = str(state.get("model") or "deepseek-chat")
+            primary, labels, sugg, agg, overlap, conf, reasoning, evidence = hybrid_diagnose_rerank(
+                user_query=user_query,
+                optimized_query=optimized_query,
+                ranked=ranked,
+                retrieval_result=retrieval_result,
+                online_search_result=online_search_result,
+                prefer_latest=bool(state.get("prefer_latest_papers", False)),
+                user_profile=profile,
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                qa_feedback_for_rerank=str(state.get("qa_feedback_for_rerank") or ""),
+            )
+            state["rerank_diagnosis"] = primary
+            state["rerank_labels"] = list(labels or [])
+            state["rerank_primary"] = str(primary)
+            state["rerank_suggestion"] = sugg
+            state["rerank_confidence"] = float(conf)
+            state["rerank_reasoning"] = str(reasoning or "")
+            state["rerank_evidence"] = dict(evidence or {})
+            state["last_rerank_score"] = float(state.get("rerank_score", 0.0))
+            state["rerank_score"] = float(agg)
+            state["_had_prior_rerank_score"] = True
+            state["after_rank_dest"] = "respond"
+            return state
+
+        user_query = state.get("user_query", "")
+        optimized_query = state.get("optimized_query", user_query)
+        retrieval_result = list(state.get("retrieval_result") or [])
+        online_search_result = list(state.get("online_search_result") or [])
+        prefer_latest = bool(state.get("prefer_latest_papers", False))
+
+        old_rerank = state.get("rerank_score")
+        had_prior = bool(state.get("_had_prior_rerank_score"))
+        api_key = str(state.get("api_key") or "")
+        base_url = str(state.get("base_url") or "https://api.deepseek.com")
+        model = str(state.get("model") or "deepseek-chat")
+        primary, labels, sugg, agg, overlap, conf, reasoning, evidence = hybrid_diagnose_rerank(
+            user_query=user_query,
+            optimized_query=optimized_query,
+            ranked=ranked,
+            retrieval_result=retrieval_result,
+            online_search_result=online_search_result,
+            prefer_latest=prefer_latest,
+            user_profile=profile,
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            qa_feedback_for_rerank=str(state.get("qa_feedback_for_rerank") or ""),
+        )
+        state["rerank_diagnosis"] = primary
+        state["rerank_labels"] = list(labels or [])
+        state["rerank_primary"] = str(primary)
+        state["rerank_suggestion"] = sugg
+        state["rerank_confidence"] = float(conf)
+        state["rerank_reasoning"] = str(reasoning or "")
+        state["rerank_evidence"] = dict(evidence or {})
+        state["last_rerank_score"] = float(old_rerank) if had_prior else float(state.get("last_rerank_score", 0.0))
+        state["rerank_score"] = float(agg)
+        state["_had_prior_rerank_score"] = True
+
+        round_n = int(state.get("round", 0))
+        dest = "respond"
+        if had_prior and old_rerank is not None and abs(float(agg) - float(old_rerank)) < 0.05:
+            dest = "respond"
+            logger.info("after_rank: no material gain vs prior score → QA")
+        elif round_n >= 2:
+            dest = "respond"
+            logger.info("after_rank: round cap → QA")
+        elif float(agg) >= 0.77 or (float(agg) >= 0.68 and float(overlap) >= 0.14):
+            dest = "respond"
+            logger.info("after_rank: strong relevance → QA (diag=%s)", primary)
+        elif not from_qa and primary in ("A", "B", "C"):
+            state["round"] = round_n + 1
+            dest = "retrieval"
+            logger.info("after_rank: diagnosis %s → retrieval (round=%s)", primary, state["round"])
+        elif not from_qa and primary == "D":
+            state["round"] = round_n + 1
+            dest = "online_search"
+            state["_online_then_fuse_only"] = True
+            logger.info("after_rank: diagnosis D → online_search (round=%s)", state["round"])
+        else:
+            dest = "respond"
+
+        # QA feedback loop: only one re-rank; do not chain into retrieval/online diagnosis loop.
+        if from_qa:
+            dest = "respond"
+
+        state["after_rank_dest"] = dest
         return state
 
     def respond_node(state: WorkflowState) -> WorkflowState:
@@ -282,10 +415,10 @@ def build_workflow(
     workflow = StateGraph(WorkflowState)
 
     workflow.add_node("planner", planner_node)
+    workflow.add_node("parallel_fetch", parallel_fetch_node)
     workflow.add_node("online_search", online_search_node)
     workflow.add_node("retrieval", retrieval_node)
     workflow.add_node("evaluate", evaluate_node)
-    workflow.add_node("re_retrieve", re_retrieve_node)
     workflow.add_node("recall", recall_node)
     workflow.add_node("fuse", fuse_node)
     workflow.add_node("rank", rank_node)
@@ -315,10 +448,9 @@ def build_workflow(
         if route == ROUTE_NEED_CLARIFY:
             return "ask_clarify"
         if route == ROUTE_RETRIEVE_LOCAL:
-            plan = state.get("plan", {})
-            if plan.get("do_online_search") or state.get("is_daily_rec"):
+            if state.get("is_daily_rec"):
                 return "online_search"
-            return "retrieval"
+            return "parallel_fetch"
         # NO_RETRIEVAL or unknown
         return "respond"
 
@@ -326,12 +458,16 @@ def build_workflow(
         "handle_feedback": "handle_feedback",
         "ask_clarify": "ask_clarify",
         "online_search": "online_search",
-        "retrieval": "retrieval",
+        "parallel_fetch": "parallel_fetch",
         "respond": "respond",
     })
 
+    workflow.add_edge("parallel_fetch", "evaluate")
+
     def after_online_search(state: WorkflowState) -> str:
         """After online search: go to recall (daily) or retrieval (query-based)."""
+        if state.pop("_online_then_fuse_only", None):
+            return "fuse"
         if state.get("is_daily_rec"):
             return "recall"
         return "retrieval"
@@ -345,42 +481,27 @@ def build_workflow(
     workflow.add_edge("retrieval", "evaluate")
 
     def after_evaluate(state: WorkflowState) -> str:
-        """Route after evaluation:
-        - SUFFICIENT / PARTIAL → fuse (normal path)
-        - INSUFFICIENT + can retry (retry < max, has refined query) → re_retrieve
-        - INSUFFICIENT + cannot retry + has papers → fuse (with disclaimer flag)
-        - INSUFFICIENT + cannot retry + no papers → ask_clarify
-        """
-        decision = state.get("planner_decision") or {}
-        evaluation = decision.get("retrieval_evaluation") or {}
-        quality = evaluation.get("quality", "SUFFICIENT")
-
-        if quality != "INSUFFICIENT":
-            return "fuse"
-
-        retry_count = state.get("retrieval_retry_count", 0)
-        has_refined = bool(evaluation.get("suggested_refined_query"))
-
-        if has_refined and retry_count <= MAX_RETRIEVAL_RETRIES and not state.get("retrieval_insufficient"):
-            return "re_retrieve"
-
+        """Route after evaluation: always fuse when any papers exist, else clarify."""
         if state.get("retrieval_result"):
             return "fuse"
-
         return "ask_clarify"
 
     workflow.add_conditional_edges("evaluate", after_evaluate, {
-        "re_retrieve": "re_retrieve",
         "fuse": "fuse",
         "ask_clarify": "ask_clarify",
     })
 
-    # re_retrieve loops back to evaluate for another quality check
-    workflow.add_edge("re_retrieve", "evaluate")
-
     workflow.add_edge("fuse", "rank")
     workflow.add_edge("recall", "rank")
-    workflow.add_edge("rank", "respond")
+
+    def route_after_rank(state: WorkflowState) -> str:
+        return str(state.get("after_rank_dest") or "respond")
+
+    workflow.add_conditional_edges("rank", route_after_rank, {
+        "respond": "respond",
+        "retrieval": "retrieval",
+        "online_search": "online_search",
+    })
 
     def after_respond(state: WorkflowState) -> str:
         """After QA responds, decide whether to run NO_RETRIEVAL gate.
@@ -388,6 +509,9 @@ def build_workflow(
         - If this was a retrieval/recall path (papers present) → END.
         - If planner route was NO_RETRIEVAL and there are no papers → gate.
         """
+        if state.get("qa_needs_rerank"):
+            return "rank"
+
         decision = state.get("planner_decision") or {}
         route = decision.get("route", ROUTE_NO_RETRIEVAL)
 
@@ -400,6 +524,7 @@ def build_workflow(
         return "end"
 
     workflow.add_conditional_edges("respond", after_respond, {
+        "rank": "rank",
         "no_retrieval_gate": "no_retrieval_gate",
         "end": END,
     })
@@ -410,16 +535,15 @@ def build_workflow(
         route = decision.get("route", ROUTE_NO_RETRIEVAL)
 
         if route == ROUTE_RETRIEVE_LOCAL:
-            plan = state.get("plan", {})
-            if plan.get("do_online_search") or state.get("is_daily_rec"):
+            if state.get("is_daily_rec"):
                 return "online_search"
-            return "retrieval"
+            return "parallel_fetch"
 
         return "end"
 
     workflow.add_conditional_edges("no_retrieval_gate", after_no_retrieval_gate, {
         "online_search": "online_search",
-        "retrieval": "retrieval",
+        "parallel_fetch": "parallel_fetch",
         "end": END,
     })
 
