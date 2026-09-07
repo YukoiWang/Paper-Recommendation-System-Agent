@@ -1,0 +1,14 @@
+id: factoid_v1
+allowed:
+  - gather_evidence
+  - search_local
+  - search_arxiv
+  - read_fulltext
+  - ask_user
+  - finish
+forbidden:
+  - recall_multi
+suggest:
+  - gather_evidence
+prefer_cited: true
+split_entities: false

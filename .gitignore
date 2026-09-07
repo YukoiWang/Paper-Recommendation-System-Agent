@@ -17,6 +17,12 @@ sdist/
 var/
 wheels/
 *.egg-info/
+# Generated harness artifacts
+langgraph_agents/harness/proposals/*.yaml
+langgraph_agents/harness/baselines/*.json
+!langgraph_agents/harness/proposals/.gitkeep
+!langgraph_agents/harness/baselines/.gitkeep
+data/harness_baselines/
 .installed.cfg
 *.egg
 MANIFEST

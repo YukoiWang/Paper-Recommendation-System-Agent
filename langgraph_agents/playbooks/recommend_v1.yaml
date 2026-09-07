@@ -1,0 +1,11 @@
+id: recommend_v1
+allowed:
+  - search_local
+  - search_arxiv
+  - recall_multi
+  - rerank
+forbidden: []
+suggest:
+  - recall_or_search
+  - rerank
+split_entities: false

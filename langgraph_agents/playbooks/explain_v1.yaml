@@ -1,0 +1,15 @@
+id: explain_v1
+allowed:
+  - search_local
+  - search_arxiv
+  - gather_evidence
+  - rerank
+  - read_fulltext
+  - ask_user
+  - finish
+forbidden:
+  - recall_multi
+suggest:
+  - search_local
+  - gather_evidence
+split_entities: false

@@ -1,0 +1,16 @@
+# Cascade / intent / evidence thresholds (design §3.2, §4.2, §7.3)
+intent_tau: 0.42
+intent_delta: 0.04
+topic_cosine: 0.75
+min_candidates: 3
+min_rerank_score: 0.0
+chunk_rel_keep: 3
+chunks_per_paper: 3
+max_pack_chunks: 12
+year_min: 1990
+year_max: 2026
+session_history_turns: 8
+cited_lru_max: 20
+exposure_days: 90
+rewrite_max: 1
+more_evidence_max: 1

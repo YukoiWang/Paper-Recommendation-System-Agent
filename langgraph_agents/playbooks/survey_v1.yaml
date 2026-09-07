@@ -1,0 +1,14 @@
+id: survey_v1
+allowed:
+  - search_local
+  - search_arxiv
+  - gather_evidence
+  - rerank
+  - finish
+forbidden:
+  - recall_multi
+suggest:
+  - search_local
+  - gather_evidence
+use_sub_queries: true
+split_entities: false

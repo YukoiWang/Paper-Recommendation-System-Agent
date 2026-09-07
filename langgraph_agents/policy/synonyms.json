@@ -1,0 +1,7 @@
+{
+  "rag": ["retrieval augmented generation", "检索增强", "retrieval-augmented"],
+  "lora": ["low-rank adaptation", "低秩适配"],
+  "llm": ["large language model", "大语言模型"],
+  "vit": ["vision transformer"],
+  "sota": ["state of the art", "最新"]
+}

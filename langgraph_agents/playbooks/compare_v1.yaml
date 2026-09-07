@@ -1,0 +1,17 @@
+id: compare_v1
+allowed:
+  - search_local
+  - search_arxiv
+  - gather_evidence
+  - rerank
+  - read_fulltext
+  - ask_user
+  - finish
+forbidden:
+  - recall_multi
+  - merged_compare_query
+suggest:
+  - search_local_per_entity
+  - search_arxiv_gap
+  - gather_evidence
+split_entities: true

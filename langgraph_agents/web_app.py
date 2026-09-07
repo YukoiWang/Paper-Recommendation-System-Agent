@@ -62,6 +62,7 @@ class SessionData:
     __slots__ = (
         "profile", "history", "cited_papers", "conversation_state",
         "profile_asked", "profile_completed", "turn_counter", "last_active",
+        "last_was_list",
     )
 
     def __init__(self, sid: str):
@@ -73,6 +74,7 @@ class SessionData:
         self.profile_completed: bool = False
         self.turn_counter: int = 0
         self.last_active: float = time.time()
+        self.last_was_list: bool = False
 
 
 sessions: Dict[str, SessionData] = {}
@@ -168,6 +170,9 @@ def log_planner(turn: int, user_query: str, result: dict, elapsed: float):
         "response_style": decision.get("response_style", "recommend"),
         "do_online_search": decision.get("do_online_search", False),
         "reasoning": decision.get("reasoning", ""),
+        "intent": (result.get("work_order") or {}).get("intent"),
+        "intent_source": (result.get("work_order") or {}).get("intent_source"),
+        "next_agent": (result.get("work_order") or {}).get("next_agent"),
         "retrieval_quality": ev.get("quality", "") if ev else None,
         "retrieval_reasoning": ev.get("reasoning", "") if ev else None,
         "suggested_refined_query": ev.get("suggested_refined_query") if ev else None,
@@ -211,6 +216,7 @@ async def chat(req: ChatRequest, request: Request, response: Response):
 
     state = {
         "user_id": sess.profile.user_id,
+        "conversation_id": sid,
         "user_profile": sess.profile,
         "user_query": req.message,
         "user_feedback": "",
@@ -222,6 +228,7 @@ async def chat(req: ChatRequest, request: Request, response: Response):
         "conversation_state": sess.conversation_state,
         "profile_asked": sess.profile_asked,
         "profile_completed": sess.profile_completed,
+        "last_was_list": sess.last_was_list,
     }
 
     t0 = time.time()
@@ -256,6 +263,12 @@ async def chat(req: ChatRequest, request: Request, response: Response):
     updated_profile = result.get("user_profile")
     if updated_profile is not None:
         sess.profile = updated_profile
+    wo = result.get("work_order") or {}
+    sess.last_was_list = wo.get("intent") in ("recommend", "daily") and bool(result.get("final_papers"))
+    conv = dict(sess.conversation_state or {})
+    conv["last_intent"] = wo.get("intent") or conv.get("last_intent")
+    conv["last_was_list"] = sess.last_was_list
+    sess.conversation_state = conv
 
     try:
         log_state(sess.turn_counter, req.message, result, elapsed)

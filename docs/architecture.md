@@ -1,5 +1,7 @@
 # IntelliScholar 系统架构文档
 
+目标多智能体实现规格（Planner / Recommend / Researcher / Writer / Critic、共享 Tools、Harness）见 [multi_agent_system_design.md](./multi_agent_system_design.md)。下文描述的是仓库当前组件划分。
+
 ## 系统架构图
 
 详见项目README中的架构说明。

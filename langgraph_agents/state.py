@@ -81,6 +81,24 @@ class WorkflowState(TypedDict, total=False):
     # --- Conversation State Summary (written by QA agent each turn) ---
     conversation_state: Optional[Dict[str, Any]]
 
-    # --- Output ---
-    response: str
-    error: Optional[str]
+    # --- v2 work order (design doc) ---
+    work_order: Optional[Dict[str, Any]]
+    evidence_pack: Optional[Dict[str, Any]]
+    critic_decision: Optional[str]
+    critic_reason: Optional[str]
+    critic_rewrite_count: int
+    critic_more_count: int
+    after_critic: str
+    episode_id: str
+    failure_type: Optional[str]
+    recovery: Optional[str]
+    researcher_trace: List[str]
+    intent_source: str
+    plan_ledger: Optional[Dict[str, Any]]
+    progress_ledger: Optional[Dict[str, Any]]
+    policy_versions: Optional[Dict[str, str]]
+    needs_replan: bool
+    replan_count: int
+    writer_style_prompt: str
+    daily_seen_ids: List[str]
+    last_was_list: bool

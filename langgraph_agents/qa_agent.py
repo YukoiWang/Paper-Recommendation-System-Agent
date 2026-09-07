@@ -488,10 +488,12 @@ class PaperQAAgent:
         state["qa_preference_score"] = qa_pref
 
         # One-shot QA → rerank when preferences poorly match the ranked list (retrieval path).
+        # v2 work_order path uses Critic instead; do not bounce to a missing rank node.
         if (
             papers_for_pref
             and route == "RETRIEVE_LOCAL"
             and not evaluation_mode
+            and not state.get("work_order")
             and qa_pref < 0.7
             and int(state.get("qa_rerank_count", 0)) == 0
         ):
@@ -530,6 +532,9 @@ class PaperQAAgent:
         tone_block = _get_tone_instruction(state)
         if tone_block:
             messages.append({"role": "system", "content": tone_block})
+        writer_style = state.get("writer_style_prompt") or ""
+        if writer_style:
+            messages.append({"role": "system", "content": writer_style})
 
         is_first_turn = not history and not state.get("profile_asked", False)
         if is_first_turn and not evaluation_mode:

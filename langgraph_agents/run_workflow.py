@@ -43,11 +43,13 @@ logger = logging.getLogger(__name__)
 
 def _build_agents(api_key: str, top_k: int, use_chromadb: bool = False,
                    chromadb_path: str = None,
-                   embedding_model: str = "BAAI/bge-base-en-v1.5"):
+                   embedding_model: str = "BAAI/bge-base-en-v1.5",
+                   legacy: bool = False):
     chromadb_path = chromadb_path or os.path.expanduser("~/chroma_db")
     from langgraph_agents import (
         RetrievalAgent, RecallAgent, OnlineSearchAgent,
         RankAgent, PaperQAAgent, PlannerAgent,
+        build_workflow, build_workflow_legacy,
     )
     if use_chromadb:
         retrieval = RetrievalAgent(
@@ -63,7 +65,8 @@ def _build_agents(api_key: str, top_k: int, use_chromadb: bool = False,
     planner = PlannerAgent(api_key=api_key)
     rank = RankAgent()
     qa = PaperQAAgent(api_key=api_key)
-    app = build_workflow(
+    builder = build_workflow_legacy if legacy else build_workflow
+    app = builder(
         retrieval_agent=retrieval,
         recall_agent=recall,
         online_agent=online,
@@ -111,13 +114,21 @@ def _print_response(result: dict, top_k: int):
         online_tag = " +online_search" if decision.get("do_online_search") else ""
         print(f"\n[Planner] route={decision.get('route', '?')}{online_tag}  "
               f"optimized_query='{(decision.get('optimized_query') or '')[:50]}'")
+        wo = result.get("work_order") or {}
+        if wo:
+            print(f"[WorkOrder] intent={wo.get('intent')} source={wo.get('intent_source')} "
+                  f"next={wo.get('next_agent')} missing={wo.get('missing_slots')}")
+        if result.get("researcher_trace"):
+            print(f"[Researcher] {result.get('researcher_trace')}")
+        if result.get("critic_decision"):
+            print(f"[Critic] {result.get('critic_decision')} {result.get('critic_reason', '')[:60]}")
         ev = decision.get("retrieval_evaluation")
         if ev:
             print(f"[Planner] retrieval_quality={ev.get('quality', '?')}  {ev.get('reasoning', '')[:60]}")
     print("=" * 60 + "\n")
 
 
-def run_single(app, profile: UserProfile, query: str, top_k: int, is_daily: bool):
+def run_single(app, profile: UserProfile, query: str, top_k: int, is_daily: bool, api_key: str = ""):
     state = {
         "user_id": profile.user_id,
         "user_profile": profile,
@@ -127,6 +138,7 @@ def run_single(app, profile: UserProfile, query: str, top_k: int, is_daily: bool
         "online_offline_fusion_ratio": 0.5,
         "history": [],
         "cited_papers": {},
+        "api_key": api_key,
     }
     result = asyncio.run(app.ainvoke(state))
     _print_response(result, top_k)
@@ -199,6 +211,7 @@ def run_chat(app, profile: UserProfile, top_k: int):
             "history": history,
             "cited_papers": cited_papers,
             "conversation_state": conversation_state,
+            "api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
         }
 
         try:
@@ -235,6 +248,7 @@ def main():
     parser.add_argument("--chromadb", action="store_true", help="Use existing ChromaDB (108万 papers)")
     parser.add_argument("--chromadb-path", default=os.path.expanduser("~/chroma_db"), help="Path to ChromaDB")
     parser.add_argument("--embedding-model", default="BAAI/bge-base-en-v1.5", help="Embedding model for ChromaDB queries")
+    parser.add_argument("--legacy", action="store_true", help="Use pre-redesign LangGraph DAG")
     parser.add_argument("--log-level", default="WARNING", help="Logging level for chat mode")
     args = parser.parse_args()
 
@@ -251,6 +265,7 @@ def main():
         use_chromadb=args.chromadb,
         chromadb_path=args.chromadb_path,
         embedding_model=args.embedding_model,
+        legacy=args.legacy,
     )
 
     if args.chromadb:
@@ -266,7 +281,7 @@ def main():
     if args.chat:
         run_chat(app, profile, args.top_k)
     else:
-        run_single(app, profile, args.query, args.top_k, args.daily)
+        run_single(app, profile, args.query, args.top_k, args.daily, api_key=args.api_key)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,19 @@
+{
+  "description": "Cascade gold: local-empty must arxiv; local-sufficient must not.",
+  "cases": [
+    {
+      "id": "must_switch",
+      "local_n": 0,
+      "already_arxiv": false,
+      "need_sota": false,
+      "expect_recovery": "switch_arxiv"
+    },
+    {
+      "id": "forbid_switch",
+      "local_n": 12,
+      "max_score": 0.9,
+      "need_sota": false,
+      "expect_recovery": null
+    }
+  ]
+}

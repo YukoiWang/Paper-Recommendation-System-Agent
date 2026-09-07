@@ -15,7 +15,12 @@ from langgraph_agents.rank_agent import RankAgent
 
 
 def build_workflow(*args, **kwargs):
-    """Lazy import: langgraph requires Python 3.10+."""
+    """Default: v2 graph (design doc). Use build_workflow_legacy for the old DAG."""
+    from langgraph_agents.workflow_v2 import build_workflow_v2
+    return build_workflow_v2(*args, **kwargs)
+
+
+def build_workflow_legacy(*args, **kwargs):
     from langgraph_agents.workflow import build_workflow as _build
     return _build(*args, **kwargs)
 
@@ -29,6 +34,7 @@ __all__ = [
     "PaperQAAgent",
     "RankAgent",
     "build_workflow",
+    "build_workflow_legacy",
     "LLMClient",
     "ROUTE_NO_RETRIEVAL",
     "ROUTE_RETRIEVE_LOCAL",

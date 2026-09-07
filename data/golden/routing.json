@@ -1,0 +1,22 @@
+{
+  "description": "10-class routing gold: intent + next_agent. Rules only (no embedder/LLM).",
+  "cases": [
+    {"id": "chitchat_en", "query": "Hello", "expect_intent": "chitchat", "expect_next": "writer"},
+    {"id": "chitchat_zh", "query": "谢谢", "expect_intent": "chitchat", "expect_next": "writer"},
+    {"id": "meta", "query": "你能做什么", "expect_intent": "meta", "expect_next": "writer"},
+    {"id": "feedback", "query": "这些太老了", "expect_intent": "feedback", "expect_next": "writer"},
+    {"id": "feedback_repush", "query": "换一批", "last_was_list": true, "expect_intent": "feedback", "expect_next": "recommend"},
+    {"id": "daily", "query": "", "is_daily": true, "expect_intent": "daily", "expect_next": "recommend"},
+    {"id": "recommend", "query": "recommend papers on RAG", "expect_intent": "recommend", "expect_next": "recommend"},
+    {"id": "recommend_zh", "query": "推荐几篇 LoRA 论文", "expect_intent": "recommend", "expect_next": "recommend"},
+    {"id": "topic_only_not_recommend", "query": "RAG 论文", "forbid_intent": ["recommend"]},
+    {"id": "explain", "query": "讲讲注意力机制是怎么演进的", "expect_intent": "explain", "expect_next": "researcher"},
+    {"id": "compare", "query": "Transformer vs Mamba 有什么区别", "expect_intent": "compare", "expect_next": "researcher"},
+    {"id": "compare_missing_entity", "query": "对比一下 Transformer", "expect_intent": "compare", "expect_next": "writer"},
+    {"id": "survey", "query": "帮我做 LLM agent 综述", "expect_intent": "survey", "expect_next": "researcher"},
+    {"id": "factoid", "query": "这篇用了什么数据集", "expect_intent": "factoid", "expect_next": "researcher"},
+    {"id": "followup", "query": "第二篇展开讲一下", "has_cited": true, "expect_intent": "followup", "expect_next": "writer"},
+    {"id": "followup_without_cited", "query": "第二篇展开讲一下", "has_cited": false, "forbid_intent": ["followup"]},
+    {"id": "more_like_not_followup", "query": "再找几篇类似的", "has_cited": true, "forbid_intent": ["followup"]}
+  ]
+}
